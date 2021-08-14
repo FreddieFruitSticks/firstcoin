@@ -10,7 +10,10 @@ import (
 	"time"
 )
 
-const difficulty = "00000"
+const (
+	difficultyLevel = 5
+	GensisBlockData = "Genesis Block"
+)
 
 type Block struct {
 	Index        int    `json:"index"`
@@ -31,17 +34,21 @@ func calculateBlockHash(index int, previousHash []byte, timestamp int, data stri
 }
 
 func GenesisBlock() Block {
+	var prevHash []byte
 	beginning := int(time.Date(2021, time.August, 13, 0, 0, 0, 0, time.UTC).UnixNano())
-	data := "Genesis Block"
-	prevHash := []byte{}
 
 	return Block{
 		Index:        0,
 		PreviousHash: prevHash,
-		Data:         data,
+		Data:         GensisBlockData,
 		Timestamp:    beginning,
-		Hash:         calculateBlockHash(0, prevHash, beginning, data),
+		Hash:         calculateBlockHash(0, prevHash, beginning, GensisBlockData),
 	}
+}
+
+func (b *Block) IsGenesisBlock() bool {
+	beginning := int(time.Date(2021, time.August, 13, 0, 0, 0, 0, time.UTC).UnixNano())
+	return b.Index == 0 && len(b.PreviousHash) == 0 && b.Data == GensisBlockData && b.Timestamp == beginning
 }
 
 func (b *Block) IsValidBlock(previousBlock Block) bool {
@@ -61,23 +68,48 @@ func (b *Block) IsValidBlock(previousBlock Block) bool {
 		return false
 	}
 
+	if !validateNewBlockDifficulty(*b) {
+		return false
+	}
+
 	return true
 }
 
-func work(hash string) bool {
-	return hash[0:len(difficulty)] == difficulty
+func validateNewBlockDifficulty(b Block) bool {
+	s := fmt.Sprintf("%s%d", string(b.Hash), b.Nonce)
+	powHash := hashBytes([]byte(s))
+	difficulty := generateDifficulty()
+
+	return validateDifficulty(powHash, difficulty)
 }
 
-func ProofOfWork(hash []byte) int {
+func validateDifficulty(powHash string, difficulty []byte) bool {
+	return powHash[0:difficultyLevel] == string(difficulty)
+}
+
+func generateDifficulty() []byte {
+	var difficulty []byte
+	for i := 0; i < difficultyLevel; i++ {
+
+		// 48 is the value of 0 string
+		difficulty = append(difficulty, 48)
+	}
+
+	return difficulty
+}
+
+// Validating that the first number of chars of the powHash are 0's
+func ProofOfWork(blockHash []byte) int {
 	var nonce int
 
-	s := fmt.Sprintf("%s%d", string(hash), nonce)
-	h := hashBytes([]byte(s))
+	s := fmt.Sprintf("%s%d", string(blockHash), nonce)
+	powHash := hashBytes([]byte(s))
+	difficulty := generateDifficulty()
 
-	for !work(h) {
+	for !validateDifficulty(powHash, difficulty) {
 		nonce++
-		s := fmt.Sprintf("%s%d", string(hash), nonce)
-		h = hashBytes([]byte(s))
+		s := fmt.Sprintf("%s%d", string(blockHash), nonce)
+		powHash = hashBytes([]byte(s))
 	}
 
 	return nonce
@@ -86,8 +118,9 @@ func ProofOfWork(hash []byte) int {
 func ValidateProofOfWork(hash []byte, nonce int) bool {
 	s := fmt.Sprintf("%s%d", string(hash), nonce)
 	h := hashBytes([]byte(s))
+	difficulty := generateDifficulty()
 
-	return work(h)
+	return validateDifficulty(h, difficulty)
 }
 
 func Hash(block Block) string {

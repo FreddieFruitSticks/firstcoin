@@ -1,16 +1,20 @@
 package coin
 
 import (
-	"reflect"
 	"time"
+)
+
+const (
+	BLOCK_GENERATION_INTERVAL      = 10
+	DIFFICULTY_ADJUSTMENT_INTERVAL = 10
 )
 
 type Blockchain struct {
 	Blocks []Block `json:"blocks"`
 }
 
-func NewBlockchain() Blockchain {
-	return Blockchain{
+func NewBlockchain() *Blockchain {
+	return &Blockchain{
 		Blocks: make([]Block, 0),
 	}
 }
@@ -21,6 +25,10 @@ func (b *Blockchain) AddBlock(bl Block) {
 
 func (b *Blockchain) GetLastBlock() Block {
 	return b.Blocks[len(b.Blocks)-1]
+}
+
+func (b *Blockchain) SetBlockchain(blocks []Block) {
+	b.Blocks = blocks
 }
 
 func (b *Blockchain) GenerateNextBlock(blockData string) Block {
@@ -36,16 +44,23 @@ func (b *Blockchain) GenerateNextBlock(blockData string) Block {
 		Timestamp:    now,
 		Hash:         hash,
 		Nonce:        nonce,
+		Difficulty:   difficultyLevel,
+	}
+}
+
+func (b *Blockchain) ReplaceBlockchain(bc Blockchain) {
+	if bc.IsValidBlockchain() && len(bc.Blocks) > len(b.Blocks) {
+		b.SetBlockchain(bc.Blocks)
 	}
 }
 
 func (b *Blockchain) IsValidBlockchain() bool {
-	if !reflect.DeepEqual(b.Blocks[0], GenesisBlock) {
+	if !b.Blocks[0].IsGenesisBlock() {
 		return false
 	}
 
-	for index, block := range b.Blocks[1:] {
-		if !block.IsValidBlock(b.Blocks[index-1]) {
+	for i := 1; i < len(b.Blocks); i++ {
+		if !b.Blocks[i].IsValidBlock(b.Blocks[i-1]) {
 			return false
 		}
 	}

@@ -7,21 +7,31 @@ import (
 	"os"
 )
 
-var GenesisBlock = coin.GenesisBlock()
+// For now seed host is identified as being on port 8080
+func isSeedHost(port string) bool {
+	if port == "8080" {
+		return true
+	}
+
+	return false
+}
 
 func main() {
 	args := os.Args[1:]
+	port := args[0]
 
 	blockchain := coin.NewBlockchain()
-	blockchain.AddBlock(GenesisBlock)
 
-	thisPeer := fmt.Sprintf("localhost:%s", args[0])
-
+	thisPeer := fmt.Sprintf("localhost:%s", port)
 	peers := peer.NewPeers()
-	client := peer.NewClient(peers)
+	client := peer.NewClient(peers, blockchain)
 
-	if args[0] != "8080" {
+	if isSeedHost(port) {
+		blockchain.AddBlock(coin.GenesisBlock())
+	} else {
 		p := client.GetPeers()
+		client.QueryPeers(p)
+
 		fmt.Println(p)
 		client.BroadcastOnline(thisPeer)
 	}

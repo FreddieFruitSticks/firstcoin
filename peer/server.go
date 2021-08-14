@@ -16,14 +16,18 @@ type Server struct {
 	ThisPeer   string
 	Client     *Client
 	Account    *coin.Account
-	Blockchain coin.Blockchain
+	Blockchain *coin.Blockchain
 }
 
 type blockData struct {
 	Data string `json:"data"`
 }
 
-func NewServer(p *Peers, c *Client, b coin.Blockchain, t string) *Server {
+type errorMessage struct {
+	ErrorMessage string `json:"errorMessage"`
+}
+
+func NewServer(p *Peers, c *Client, b *coin.Blockchain, t string) *Server {
 	return &Server{Peers: p, Client: c, Blockchain: b, ThisPeer: t}
 }
 
@@ -129,6 +133,18 @@ func (s *Server) HandleServer(port string) {
 			s.Peers.AddHostname(t.Hostname)
 
 			err = json.NewEncoder(w).Encode(s.Peers.Hostnames)
+			utils.CheckError(err)
+		}
+	})
+
+	http.HandleFunc("/latest-block", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			latestBlock := s.Blockchain.Blocks[len(s.Blockchain.Blocks)-1]
+
+			err := json.NewEncoder(w).Encode(latestBlock)
 			utils.CheckError(err)
 		}
 	})
