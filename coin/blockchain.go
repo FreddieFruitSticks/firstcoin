@@ -13,9 +13,9 @@ type Blockchain struct {
 	Blocks []Block `json:"blocks"`
 }
 
-func NewBlockchain() *Blockchain {
+func NewBlockchain(b []Block) *Blockchain {
 	return &Blockchain{
-		Blocks: make([]Block, 0),
+		Blocks: b,
 	}
 }
 

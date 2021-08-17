@@ -118,17 +118,22 @@ func (c *Client) QueryPeers(peers map[string]string) {
 				fmt.Println(err)
 			}
 
-			c.Blockchain.SetBlockchain(bc.Blocks)
+			if bc.IsValidBlockchain() {
+				c.Blockchain.SetBlockchain(bc.Blocks)
+			}
 
 			return
 		}
 
-		if len(c.Blockchain.Blocks) > 0 && block.Index != c.Blockchain.GetLastBlock().Index {
+		if len(c.Blockchain.Blocks) > 0 && block.Index > c.Blockchain.GetLastBlock().Index {
 			bc, err := c.GetBlockchain()
 			if err != nil {
 				fmt.Println(err)
 			}
-			c.Blockchain.SetBlockchain(bc.Blocks)
+
+			if bc.IsValidBlockchain() {
+				c.Blockchain.SetBlockchain(bc.Blocks)
+			}
 		}
 	}
 
