@@ -48,28 +48,26 @@ func (c *Client) BroadcastBlock(block coin.Block, thisPeer string) coin.Block {
 }
 
 // Fetch from seed host for now
-func (c *Client) GetBlockchain() (*coin.Blockchain, error) {
-	resp, err := http.Get(fmt.Sprintf("http://%s/block-chain", seedHost))
+func (c *Client) getBlockchain(address string) (*coin.Blockchain, error) {
+	resp, err := http.Get(fmt.Sprintf("http://%s/block-chain", address))
 	if err != nil {
 		return nil, err
 	}
 
 	respBody, err := ioutil.ReadAll(resp.Body)
-	var blocks []coin.Block
+	var bc coin.Blockchain
 
-	err = json.Unmarshal(respBody, &blocks)
+	err = json.Unmarshal(respBody, &bc)
 	if err != nil {
 		return nil, err
 	}
 
-	c.Blockchain.SetBlockchain(blocks)
-
-	if !c.Blockchain.IsValidBlockchain() {
+	if !bc.IsValidBlockchain() {
 		c.Blockchain = nil
 		return nil, fmt.Errorf("invalid blockchain")
 	}
 
-	return c.Blockchain, nil
+	return &bc, nil
 }
 
 // Fetch latest block from seed host for now
@@ -113,26 +111,26 @@ func (c *Client) QueryPeers(peers map[string]string) {
 		}
 
 		if len(c.Blockchain.Blocks) == 0 {
-			bc, err := c.GetBlockchain()
+			bc, err := c.getBlockchain(address)
 			if err != nil {
 				fmt.Println(err)
 			}
 
 			if bc.IsValidBlockchain() {
-				c.Blockchain.SetBlockchain(bc.Blocks)
+				c.Blockchain.SetBlockchain(bc.Blocks, bc.CurrentDifficultyLevel)
 			}
 
 			return
 		}
 
 		if len(c.Blockchain.Blocks) > 0 && block.Index > c.Blockchain.GetLastBlock().Index {
-			bc, err := c.GetBlockchain()
+			bc, err := c.getBlockchain(address)
 			if err != nil {
 				fmt.Println(err)
 			}
 
 			if bc.IsValidBlockchain() {
-				c.Blockchain.SetBlockchain(bc.Blocks)
+				c.Blockchain.SetBlockchain(bc.Blocks, bc.CurrentDifficultyLevel)
 			}
 		}
 	}

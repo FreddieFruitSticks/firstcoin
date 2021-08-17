@@ -98,7 +98,7 @@ func (s *Server) HandleServer(port string) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 
-			err := json.NewEncoder(w).Encode(s.Blockchain.Blocks)
+			err := json.NewEncoder(w).Encode(s.Blockchain)
 			utils.CheckError(err)
 
 		}

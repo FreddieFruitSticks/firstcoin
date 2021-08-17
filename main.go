@@ -16,19 +16,23 @@ func isSeedHost(port string) bool {
 	return false
 }
 
+const (
+	seedDifficultyLevel = 5
+)
+
 func main() {
 	args := os.Args[1:]
 	port := args[0]
 
 	blocks := make([]coin.Block, 0)
-	blockchain := coin.NewBlockchain(blocks)
+	blockchain := coin.NewBlockchain(blocks, seedDifficultyLevel)
 
 	thisPeer := fmt.Sprintf("localhost:%s", port)
 	peers := peer.NewPeers()
 	client := peer.NewClient(peers, blockchain)
 
 	if isSeedHost(port) {
-		blockchain.AddBlock(coin.GenesisBlock())
+		blockchain.AddBlock(coin.GenesisBlock(seedDifficultyLevel))
 	} else {
 		p := client.GetPeers()
 		client.QueryPeers(p)
