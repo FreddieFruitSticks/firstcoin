@@ -107,7 +107,6 @@ func ProofOfWork(blockHash []byte, difficultyLevel int) int {
 	s := fmt.Sprintf("%s%d", string(blockHash), nonce)
 	powHash := hashBytes([]byte(s))
 	difficulty := generateDifficulty(difficultyLevel)
-	fmt.Println(difficulty)
 
 	for !validateDifficulty(powHash, difficulty, difficultyLevel) {
 		nonce++

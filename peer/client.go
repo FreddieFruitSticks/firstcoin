@@ -117,7 +117,7 @@ func (c *Client) QueryPeers(peers map[string]string) {
 			}
 
 			if bc.IsValidBlockchain() {
-				c.Blockchain.SetBlockchain(bc.Blocks, bc.CurrentDifficultyLevel)
+				c.Blockchain.SetBlockchain(bc.Blocks)
 			}
 
 			return
@@ -130,7 +130,7 @@ func (c *Client) QueryPeers(peers map[string]string) {
 			}
 
 			if bc.IsValidBlockchain() {
-				c.Blockchain.SetBlockchain(bc.Blocks, bc.CurrentDifficultyLevel)
+				c.Blockchain.SetBlockchain(bc.Blocks)
 			}
 		}
 	}

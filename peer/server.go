@@ -79,12 +79,9 @@ func (s *Server) HandleServer(port string) {
 			b, err := ioutil.ReadAll(r.Body)
 			utils.CheckError(err)
 
-			fmt.Println(string(b))
-
 			data := coin.Block{}
 			err = json.Unmarshal(b, &data)
 			utils.CheckError(err)
-			fmt.Println(data.IsValidBlock(s.Blockchain.GetLastBlock()))
 
 			if data.IsValidBlock(s.Blockchain.GetLastBlock()) {
 				s.Blockchain.AddBlock(data)
