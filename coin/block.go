@@ -74,6 +74,19 @@ func (b *Block) IsValidBlock(previousBlock Block) bool {
 		return false
 	}
 
+	if b.Timestamp <= previousBlock.Timestamp {
+		return false
+	}
+
+	return true
+}
+
+// validate that the current block's timestamp isnt more than 10s in the future
+func (b *Block) ValidTimestampToNow() bool {
+	if (int(time.Now().UnixNano()) - b.Timestamp) > 10*NANO_SECONDS {
+		return false
+	}
+
 	return true
 }
 

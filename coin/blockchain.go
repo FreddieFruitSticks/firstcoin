@@ -15,7 +15,7 @@ type Blockchain struct {
 	Blocks []Block `json:"blocks"`
 }
 
-func NewBlockchain(b []Block, d int) *Blockchain {
+func NewBlockchain(b []Block) *Blockchain {
 	return &Blockchain{
 		Blocks: b,
 	}
@@ -52,21 +52,30 @@ func (b *Blockchain) GenerateNextBlock(blockData string) Block {
 	}
 }
 
-// Always favour the longest chain - most work
+// Always favour the chain with the most work - it is sifficient to check the DifficultyLevel attribute on the block because this is validated in the IsValidBlock method
 func (b *Blockchain) ReplaceBlockchain(bc Blockchain) {
-	if bc.IsValidBlockchain() && len(bc.Blocks) > len(b.Blocks) {
+	if bc.cumulativeDifficulty() > b.cumulativeDifficulty() {
 		b.SetBlockchain(bc.Blocks)
 	}
+}
+
+func (b *Blockchain) cumulativeDifficulty() int {
+	cumulativeDifficulty := 0
+	for _, block := range b.Blocks {
+		cumulativeDifficulty += block.DifficultyLevel
+	}
+
+	return cumulativeDifficulty
 }
 
 // Difficulty level is decreased by 1 if time between last 10 blocks > 200s, and increased by 1 if time < 50s. This keeps it roughly 100s for 10 blocks
 func (b *Blockchain) getDifficultyLevel() int {
 	if b.GetLastBlock().Index%DIFFICULTY_ADJUSTMENT_INTERVAL == 0 && b.GetLastBlock().Index != 0 {
 		fmt.Println((b.GetLastBlock().Timestamp - b.Blocks[len(b.Blocks)-DIFFICULTY_ADJUSTMENT_INTERVAL].Timestamp) / NANO_SECONDS)
-		if (b.GetLastBlock().Timestamp-b.Blocks[len(b.Blocks)-DIFFICULTY_ADJUSTMENT_INTERVAL].Timestamp)/NANO_SECONDS >= 2*DIFFICULTY_ADJUSTMENT_INTERVAL*BLOCK_GENERATION_INTERVAL {
+		if (b.GetLastBlock().Timestamp - b.Blocks[len(b.Blocks)-DIFFICULTY_ADJUSTMENT_INTERVAL].Timestamp) >= 2*DIFFICULTY_ADJUSTMENT_INTERVAL*BLOCK_GENERATION_INTERVAL*NANO_SECONDS {
 			return b.GetLastBlock().DifficultyLevel - 1
 		}
-		if (b.GetLastBlock().Timestamp-b.Blocks[len(b.Blocks)-DIFFICULTY_ADJUSTMENT_INTERVAL].Timestamp)/NANO_SECONDS <= 0.5*DIFFICULTY_ADJUSTMENT_INTERVAL*BLOCK_GENERATION_INTERVAL {
+		if (b.GetLastBlock().Timestamp - b.Blocks[len(b.Blocks)-DIFFICULTY_ADJUSTMENT_INTERVAL].Timestamp) <= 0.5*DIFFICULTY_ADJUSTMENT_INTERVAL*BLOCK_GENERATION_INTERVAL*NANO_SECONDS {
 			return b.GetLastBlock().DifficultyLevel + 1
 		}
 	}

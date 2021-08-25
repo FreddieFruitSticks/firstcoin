@@ -79,12 +79,12 @@ func (s *Server) HandleServer(port string) {
 			b, err := ioutil.ReadAll(r.Body)
 			utils.CheckError(err)
 
-			data := coin.Block{}
-			err = json.Unmarshal(b, &data)
+			block := coin.Block{}
+			err = json.Unmarshal(b, &block)
 			utils.CheckError(err)
 
-			if data.IsValidBlock(s.Blockchain.GetLastBlock()) {
-				s.Blockchain.AddBlock(data)
+			if block.IsValidBlock(s.Blockchain.GetLastBlock()) && block.ValidTimestampToNow() {
+				s.Blockchain.AddBlock(block)
 			}
 		}
 	})

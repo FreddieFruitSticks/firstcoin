@@ -25,7 +25,7 @@ func main() {
 	port := args[0]
 
 	blocks := make([]coin.Block, 0)
-	blockchain := coin.NewBlockchain(blocks, seedDifficultyLevel)
+	blockchain := coin.NewBlockchain(blocks)
 
 	thisPeer := fmt.Sprintf("localhost:%s", port)
 	peers := peer.NewPeers()
