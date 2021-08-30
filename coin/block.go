@@ -10,23 +10,23 @@ import (
 	"time"
 )
 
-const (
-	GensisBlockData = "Genesis Block"
-)
+var GensisBlockData []Transaction
 
 type Block struct {
-	Index           int    `json:"index"`
-	PreviousHash    []byte `json:"previousHash"`
-	Data            string `json:"data"`
-	Timestamp       int    `json:"timeStamp"`
-	DifficultyLevel int    `json:"difficultyLevel"`
-	Nonce           int    `json:"nonce"`
-	Hash            []byte `json:"hash"`
+	Index           int           `json:"index"`
+	PreviousHash    []byte        `json:"previousHash"`
+	TransactionData []Transaction `json:"transactions"`
+	Timestamp       int           `json:"timeStamp"`
+	DifficultyLevel int           `json:"difficultyLevel"`
+	Nonce           int           `json:"nonce"`
+	Hash            []byte        `json:"hash"`
 }
 
-func calculateBlockHash(index int, previousHash []byte, timestamp int, data string, difficultyLevel int) []byte {
+// TODO: loop over transaction hashes rather, maybe?
+func calculateBlockHash(index int, previousHash []byte, timestamp int, transactionData []Transaction, difficultyLevel int) []byte {
 	msgHash := sha256.New()
-	_, err := msgHash.Write([]byte(fmt.Sprintf("%d%s%d%s%d", index, string(previousHash), timestamp, data, difficultyLevel)))
+	concatenatedTransactionIDs := concatTransactionIDs(transactionData)
+	_, err := msgHash.Write([]byte(fmt.Sprintf("%d%s%d%s%d", index, string(previousHash), timestamp, concatenatedTransactionIDs, difficultyLevel)))
 	utils.CheckError(err)
 
 	return msgHash.Sum(nil)
@@ -40,7 +40,7 @@ func GenesisBlock(seedDifficultyLevel int) Block {
 	return Block{
 		Index:           0,
 		PreviousHash:    prevHash,
-		Data:            GensisBlockData,
+		TransactionData: GensisBlockData,
 		Timestamp:       beginning,
 		Hash:            blockHash,
 		DifficultyLevel: seedDifficultyLevel,
@@ -50,7 +50,7 @@ func GenesisBlock(seedDifficultyLevel int) Block {
 
 func (b *Block) IsGenesisBlock() bool {
 	beginning := int(time.Date(2021, time.August, 13, 0, 0, 0, 0, time.UTC).UnixNano())
-	return b.Index == 0 && len(b.PreviousHash) == 0 && b.Data == GensisBlockData && b.Timestamp == beginning
+	return b.Index == 0 && len(b.PreviousHash) == 0 && len(b.TransactionData) == 0 && b.Timestamp == beginning
 }
 
 func (b *Block) IsValidBlock(previousBlock Block) bool {
@@ -62,7 +62,7 @@ func (b *Block) IsValidBlock(previousBlock Block) bool {
 		return false
 	}
 
-	if !reflect.DeepEqual(calculateBlockHash(b.Index, b.PreviousHash, b.Timestamp, b.Data, b.DifficultyLevel), b.Hash) {
+	if !reflect.DeepEqual(calculateBlockHash(b.Index, b.PreviousHash, b.Timestamp, b.TransactionData, b.DifficultyLevel), b.Hash) {
 		return false
 	}
 
@@ -152,4 +152,19 @@ func hashBytes(blockString []byte) string {
 	hash.Write(blockString)
 	sha1Hash := hex.EncodeToString(hash.Sum(nil))
 	return sha1Hash
+}
+
+func concatTransactionIDs(transactions []Transaction) string {
+	concatenatedTransactionIDs := []byte{}
+
+	for _, transaction := range transactions {
+		concatenatedTransactionIDs = append(concatenatedTransactionIDs, transaction.ID...)
+	}
+	msgHash := sha256.New()
+	_, err := msgHash.Write(concatenatedTransactionIDs)
+	if err != nil {
+		fmt.Printf("error hashing concatenated IDs %s", err.Error())
+	}
+
+	return string(msgHash.Sum(nil))
 }

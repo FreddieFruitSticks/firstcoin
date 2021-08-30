@@ -13,12 +13,14 @@ import (
 type Client struct {
 	Peers      *Peers
 	Blockchain *coin.Blockchain
+	ThisPeer   string
 }
 
-func NewClient(p *Peers, b *coin.Blockchain) *Client {
+func NewClient(p *Peers, b *coin.Blockchain, t string) *Client {
 	return &Client{
 		Peers:      p,
 		Blockchain: b,
+		ThisPeer:   t,
 	}
 }
 
@@ -156,6 +158,29 @@ func (c *Client) BroadcastOnline(thisHostname string) {
 	}
 }
 
-type HostName struct {
-	Hostname string `json:"hostName"`
+func (c *Client) BroadcastTransaction(tx coin.Transaction) error {
+	transaction, err := json.Marshal(tx)
+	if err != nil {
+		return err
+	}
+
+	for _, peer := range c.Peers.Hostnames {
+		if peer != c.ThisPeer {
+			body := bytes.NewReader(transaction)
+			resp, err := http.Post(fmt.Sprintf("http://%s/transaction", peer), "application/json", body)
+			if err != nil {
+				fmt.Println(err)
+
+				// Remove host if error for now - assume its a fail peer
+				c.Peers.RemoveHostname(peer)
+			} else {
+				if resp.StatusCode >= 400 {
+					c.Peers.RemoveHostname(peer)
+				}
+			}
+
+		}
+	}
+
+	return nil
 }

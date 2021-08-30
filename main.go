@@ -24,12 +24,17 @@ func main() {
 	args := os.Args[1:]
 	port := args[0]
 
+	unspentTxOuts := make(map[string]coin.UnspentTxOut, 0)
 	blocks := make([]coin.Block, 0)
 	blockchain := coin.NewBlockchain(blocks)
 
 	thisPeer := fmt.Sprintf("localhost:%s", port)
 	peers := peer.NewPeers()
-	client := peer.NewClient(peers, blockchain)
+	client := peer.NewClient(peers, blockchain, thisPeer)
+	account := coin.NewAccount()
+	account.GenerateKeyPair()
+
+	transactionPool := coin.CreateNewTransactionPool(account.PublicKey, *account)
 
 	if isSeedHost(port) {
 		blockchain.AddBlock(coin.GenesisBlock(seedDifficultyLevel))
@@ -43,7 +48,7 @@ func main() {
 
 	peers.AddHostname(thisPeer)
 
-	server := peer.NewServer(peers, client, blockchain, thisPeer)
+	server := peer.NewServer(peers, client, blockchain, account, thisPeer, &unspentTxOuts, &transactionPool)
 
 	server.HandleServer(args[0])
 }

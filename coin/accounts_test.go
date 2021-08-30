@@ -12,7 +12,7 @@ func TestVerify(t *testing.T) {
 	account.GenerateKeyPair()
 	pemBlock, _ := pem.Decode([]byte(account.PublicKey))
 
-	signature := account.GenerateSignature()
+	signature := account.GenerateSignature([]byte{12, 23})
 
 	publicKey, err := x509.ParsePKCS1PublicKey(pemBlock.Bytes)
 	if err != nil {
@@ -21,7 +21,7 @@ func TestVerify(t *testing.T) {
 
 	verify := account.VerifySignature(signature, publicKey)
 
-	if !verify{
+	if !verify {
 		t.Fatalf("signature not confirmed")
 	}
 }

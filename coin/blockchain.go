@@ -33,18 +33,18 @@ func (b *Blockchain) SetBlockchain(blocks []Block) {
 	b.Blocks = blocks
 }
 
-func (b *Blockchain) GenerateNextBlock(blockData string) Block {
+func (b *Blockchain) GenerateNextBlock(transactionPool *[]Transaction) Block {
 	previousBlock := b.GetLastBlock()
 	now := int(time.Now().UnixNano())
 	currentDifficultyLevel := b.getDifficultyLevel()
 	fmt.Println("current difficulty: ", currentDifficultyLevel)
-	hash := calculateBlockHash(previousBlock.Index+1, previousBlock.Hash, now, blockData, currentDifficultyLevel)
+	hash := calculateBlockHash(previousBlock.Index+1, previousBlock.Hash, now, *transactionPool, currentDifficultyLevel)
 	nonce := ProofOfWork(hash, currentDifficultyLevel)
 
 	return Block{
 		Index:           previousBlock.Index + 1,
 		PreviousHash:    previousBlock.Hash,
-		Data:            blockData,
+		TransactionData: *transactionPool,
 		Timestamp:       now,
 		Hash:            hash,
 		Nonce:           nonce,
@@ -52,13 +52,14 @@ func (b *Blockchain) GenerateNextBlock(blockData string) Block {
 	}
 }
 
-// Always favour the chain with the most work - it is sifficient to check the DifficultyLevel attribute on the block because this is validated in the IsValidBlock method
+// Always favour the chain with the most work - it is sufficient to check the DifficultyLevel attribute on the block because this is validated in the IsValidBlock method
 func (b *Blockchain) ReplaceBlockchain(bc Blockchain) {
 	if bc.cumulativeDifficulty() > b.cumulativeDifficulty() {
 		b.SetBlockchain(bc.Blocks)
 	}
 }
 
+// calculate the difficulty of the block chain
 func (b *Blockchain) cumulativeDifficulty() int {
 	cumulativeDifficulty := 0
 	for _, block := range b.Blocks {

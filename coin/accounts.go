@@ -15,26 +15,15 @@ import (
 
 type Account struct {
 	Accounts         map[string]int
-	PublicKey        string
-	PrivateKey       string
+	PublicKey        []byte
+	PrivateKey       []byte
 	PrivateKeyObject *rsa.PrivateKey
 	PublicKeyObject  *rsa.PublicKey
 	MessageHashSum   []byte
 }
 
 func NewAccount() *Account {
-	msg := []byte("verifiable message")
-
-	msgHash := sha256.New()
-	_, err := msgHash.Write(msg)
-	if err != nil {
-		panic(err)
-	}
-	msgHashSum := msgHash.Sum(nil)
-
-	return &Account{
-		MessageHashSum: msgHashSum,
-	}
+	return &Account{}
 }
 
 func (a *Account) AddAccount(publicKey string) {
@@ -74,12 +63,12 @@ func (a *Account) GenerateKeyPair() {
 	_, err = buffer.Read(sk)
 	utils.CheckError(err)
 
-	a.PrivateKey = string(sk)
+	a.PrivateKey = sk
 
 	buffer.Reset()
 
 	// public key
-	publicKeyBytes:= x509.MarshalPKCS1PublicKey(publickey)
+	publicKeyBytes := x509.MarshalPKCS1PublicKey(publickey)
 	publicKeyBlock := &pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: publicKeyBytes,
@@ -96,27 +85,43 @@ func (a *Account) GenerateKeyPair() {
 	_, err = buffer.Read(pk)
 	utils.CheckError(err)
 
-	a.PublicKey = string(pk)
+	a.PublicKey = pk
 }
 
-func (a *Account) GenerateSignature() string {
+func (a *Account) GenerateSignature(msg []byte) []byte {
+	msgHash := sha256.New()
+	_, err := msgHash.Write(msg)
+	if err != nil {
+		panic(err)
+	}
+	msgHashSum := msgHash.Sum(nil)
+
 	// In order to generate the signature, we provide a random number generator,
 	// our private key, the hashing algorithm that we used, and the hash sum
 	// of our message
-	signature, err := rsa.SignPSS(rand.Reader, a.PrivateKeyObject, crypto.SHA256, a.MessageHashSum, nil)
+	signature, err := rsa.SignPSS(rand.Reader, a.PrivateKeyObject, crypto.SHA256, msgHashSum, nil)
 	if err != nil {
 		panic(err)
 	}
 
-	return string(signature)
+	return signature
 }
 
-func (a *Account) VerifySignature(signature string, pk *rsa.PublicKey) bool {
-	err := rsa.VerifyPSS(pk, crypto.SHA256, a.MessageHashSum, []byte(signature), nil)
+func (a *Account) VerifySignature(signature []byte, pk *rsa.PublicKey) bool {
+	err := rsa.VerifyPSS(pk, crypto.SHA256, a.MessageHashSum, signature, nil)
 	if err != nil {
 		fmt.Println("could not verify signature: ", err)
 		return false
 	}
 
 	return true
+}
+
+// This is just a SHA of all the transaction data
+func generateTransactionID(address []byte, amount int, uTxOId string, uTxOIndex int) []byte {
+	msgHash := sha256.New()
+	_, err := msgHash.Write([]byte(fmt.Sprintf("%s%d%s%d", address, amount, uTxOId, uTxOIndex)))
+	utils.CheckError(err)
+
+	return msgHash.Sum(nil)
 }
