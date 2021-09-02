@@ -3,6 +3,7 @@ package peer
 import (
 	"blockchain/coin"
 	"blockchain/utils"
+	"blockchain/wallet"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -158,7 +159,7 @@ func (c *Client) BroadcastOnline(thisHostname string) {
 	}
 }
 
-func (c *Client) BroadcastTransaction(tx coin.Transaction) error {
+func (c *Client) BroadcastTransaction(tx wallet.Transaction) error {
 	transaction, err := json.Marshal(tx)
 	if err != nil {
 		return err

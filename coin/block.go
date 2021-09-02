@@ -2,6 +2,7 @@ package coin
 
 import (
 	"blockchain/utils"
+	"blockchain/wallet"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,22 +11,22 @@ import (
 	"time"
 )
 
-var GensisBlockData []Transaction
+var GensisBlockData []wallet.Transaction
 
 type Block struct {
-	Index           int           `json:"index"`
-	PreviousHash    []byte        `json:"previousHash"`
-	TransactionData []Transaction `json:"transactions"`
-	Timestamp       int           `json:"timeStamp"`
-	DifficultyLevel int           `json:"difficultyLevel"`
-	Nonce           int           `json:"nonce"`
-	Hash            []byte        `json:"hash"`
+	Index           int                  `json:"index"`
+	PreviousHash    []byte               `json:"previousHash"`
+	Transactions    []wallet.Transaction `json:"transactions"`
+	Timestamp       int                  `json:"timeStamp"`
+	DifficultyLevel int                  `json:"difficultyLevel"`
+	Nonce           int                  `json:"nonce"`
+	Hash            []byte               `json:"hash"`
 }
 
 // TODO: loop over transaction hashes rather, maybe?
-func calculateBlockHash(index int, previousHash []byte, timestamp int, transactionData []Transaction, difficultyLevel int) []byte {
+func calculateBlockHash(index int, previousHash []byte, timestamp int, transactions []wallet.Transaction, difficultyLevel int) []byte {
 	msgHash := sha256.New()
-	concatenatedTransactionIDs := concatTransactionIDs(transactionData)
+	concatenatedTransactionIDs := concatTransactionIDs(transactions)
 	_, err := msgHash.Write([]byte(fmt.Sprintf("%d%s%d%s%d", index, string(previousHash), timestamp, concatenatedTransactionIDs, difficultyLevel)))
 	utils.CheckError(err)
 
@@ -40,7 +41,7 @@ func GenesisBlock(seedDifficultyLevel int) Block {
 	return Block{
 		Index:           0,
 		PreviousHash:    prevHash,
-		TransactionData: GensisBlockData,
+		Transactions:    GensisBlockData,
 		Timestamp:       beginning,
 		Hash:            blockHash,
 		DifficultyLevel: seedDifficultyLevel,
@@ -50,7 +51,7 @@ func GenesisBlock(seedDifficultyLevel int) Block {
 
 func (b *Block) IsGenesisBlock() bool {
 	beginning := int(time.Date(2021, time.August, 13, 0, 0, 0, 0, time.UTC).UnixNano())
-	return b.Index == 0 && len(b.PreviousHash) == 0 && len(b.TransactionData) == 0 && b.Timestamp == beginning
+	return b.Index == 0 && len(b.PreviousHash) == 0 && len(b.Transactions) == 0 && b.Timestamp == beginning
 }
 
 func (b *Block) IsValidBlock(previousBlock Block) bool {
@@ -62,7 +63,7 @@ func (b *Block) IsValidBlock(previousBlock Block) bool {
 		return false
 	}
 
-	if !reflect.DeepEqual(calculateBlockHash(b.Index, b.PreviousHash, b.Timestamp, b.TransactionData, b.DifficultyLevel), b.Hash) {
+	if !reflect.DeepEqual(calculateBlockHash(b.Index, b.PreviousHash, b.Timestamp, b.Transactions, b.DifficultyLevel), b.Hash) {
 		return false
 	}
 
@@ -154,17 +155,24 @@ func hashBytes(blockString []byte) string {
 	return sha1Hash
 }
 
-func concatTransactionIDs(transactions []Transaction) string {
-	concatenatedTransactionIDs := []byte{}
+// a SHA version of a transaction is a concatenation of all transaction IDs and all transaction input signatures
+func concatTransactionIDs(transactions []wallet.Transaction) []byte {
+	concatTransaction := []byte{}
 
 	for _, transaction := range transactions {
-		concatenatedTransactionIDs = append(concatenatedTransactionIDs, transaction.ID...)
+		concatTxInSignatures := []byte{}
+		for _, txIn := range transaction.TxIns {
+			concatTxInSignatures = append(concatTxInSignatures, txIn.Signature...)
+		}
+
+		concatTransaction = append(concatTransaction, transaction.ID...)
+		concatTransaction = append(concatTransaction, concatTxInSignatures...)
 	}
 	msgHash := sha256.New()
-	_, err := msgHash.Write(concatenatedTransactionIDs)
+	_, err := msgHash.Write(concatTransaction)
 	if err != nil {
 		fmt.Printf("error hashing concatenated IDs %s", err.Error())
 	}
 
-	return string(msgHash.Sum(nil))
+	return msgHash.Sum(nil)
 }

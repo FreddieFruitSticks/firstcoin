@@ -3,6 +3,7 @@ package main
 import (
 	"blockchain/coin"
 	"blockchain/peer"
+	"blockchain/wallet"
 	"fmt"
 	"os"
 )
@@ -24,17 +25,17 @@ func main() {
 	args := os.Args[1:]
 	port := args[0]
 
-	unspentTxOuts := make(map[string]coin.UnspentTxOut, 0)
+	unspentTxOuts := make(map[string]wallet.UTxOut, 0)
 	blocks := make([]coin.Block, 0)
 	blockchain := coin.NewBlockchain(blocks)
 
 	thisPeer := fmt.Sprintf("localhost:%s", port)
 	peers := peer.NewPeers()
 	client := peer.NewClient(peers, blockchain, thisPeer)
-	account := coin.NewAccount()
+	account := wallet.NewAccount()
 	account.GenerateKeyPair()
 
-	transactionPool := coin.CreateNewTransactionPool(account.PublicKey, *account)
+	transactionPool := wallet.CreateNewTransactionPool(account.PublicKey, *account)
 
 	if isSeedHost(port) {
 		blockchain.AddBlock(coin.GenesisBlock(seedDifficultyLevel))

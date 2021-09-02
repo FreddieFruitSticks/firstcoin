@@ -1,6 +1,7 @@
 package coin
 
 import (
+	"blockchain/wallet"
 	"fmt"
 	"time"
 )
@@ -33,7 +34,7 @@ func (b *Blockchain) SetBlockchain(blocks []Block) {
 	b.Blocks = blocks
 }
 
-func (b *Blockchain) GenerateNextBlock(transactionPool *[]Transaction) Block {
+func (b *Blockchain) GenerateNextBlock(transactionPool *[]wallet.Transaction) Block {
 	previousBlock := b.GetLastBlock()
 	now := int(time.Now().UnixNano())
 	currentDifficultyLevel := b.getDifficultyLevel()
@@ -44,7 +45,7 @@ func (b *Blockchain) GenerateNextBlock(transactionPool *[]Transaction) Block {
 	return Block{
 		Index:           previousBlock.Index + 1,
 		PreviousHash:    previousBlock.Hash,
-		TransactionData: *transactionPool,
+		Transactions:    *transactionPool,
 		Timestamp:       now,
 		Hash:            hash,
 		Nonce:           nonce,

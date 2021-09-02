@@ -3,6 +3,7 @@ package peer
 import (
 	"blockchain/coin"
 	"blockchain/utils"
+	"blockchain/wallet"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -15,10 +16,10 @@ type Server struct {
 	Peers           *Peers
 	ThisPeer        string
 	Client          *Client
-	Account         *coin.Account
+	Account         *wallet.Account
 	Blockchain      *coin.Blockchain
-	TransactionPool *[]coin.Transaction
-	UnspentTxOuts   *map[string]coin.UnspentTxOut
+	TransactionPool *[]wallet.Transaction
+	UTxOs           *map[string]wallet.UTxOut
 }
 
 type BlockDataControl struct {
@@ -38,8 +39,8 @@ type errorMessage struct {
 	ErrorMessage string `json:"errorMessage"`
 }
 
-func NewServer(p *Peers, c *Client, b *coin.Blockchain, a *coin.Account, t string, uTxO *map[string]coin.UnspentTxOut, tp *[]coin.Transaction) *Server {
-	return &Server{Peers: p, Client: c, Blockchain: b, Account: a, ThisPeer: t, UnspentTxOuts: uTxO, TransactionPool: tp}
+func NewServer(p *Peers, c *Client, b *coin.Blockchain, a *wallet.Account, t string, uTxO *map[string]wallet.UTxOut, tp *[]wallet.Transaction) *Server {
+	return &Server{Peers: p, Client: c, Blockchain: b, Account: a, ThisPeer: t, UTxOs: uTxO, TransactionPool: tp}
 }
 
 func (s *Server) HandleServer(port string) {
@@ -77,10 +78,12 @@ func (s *Server) HandleServer(port string) {
 			s.Blockchain.AddBlock(block)
 			s.Client.BroadcastBlock(block, s.ThisPeer)
 
-			updateUnspentTxOutputs(s.TransactionPool, s.UnspentTxOuts)
+			updateUnspentTxOutputs(s.TransactionPool, s.UTxOs)
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
+
+			// byte arrays base64 encode and decode (on the other end). So the txOut address encodes as b64
 			err = json.NewEncoder(w).Encode(s.Blockchain.Blocks)
 		}
 	})
@@ -100,7 +103,7 @@ func (s *Server) HandleServer(port string) {
 
 			if block.IsValidBlock(s.Blockchain.GetLastBlock()) && block.ValidTimestampToNow() {
 				s.Blockchain.AddBlock(block)
-				updateUnspentTxOutputs(&block.TransactionData, s.UnspentTxOuts)
+				updateUnspentTxOutputs(&block.Transactions, s.UTxOs)
 				// TODO: when this node receives a valid block, it must remove transactions from its own pool that exist in the blocks transactions data
 			}
 		}
@@ -184,12 +187,12 @@ func (s *Server) HandleServer(port string) {
 				return
 			}
 
-			unspentTransaction := coin.UnspentTxOut{
-				Address: []byte("123"),
+			unspentTransaction := wallet.UTxOut{
+				Address: []byte("1235asasdasda"),
 				Amount:  1000,
 			}
 
-			transaction := coin.CreateTransaction([]byte(createTransactionControl.Address), createTransactionControl.Amount, &unspentTransaction, s.Account)
+			transaction := wallet.CreateTransaction([]byte(createTransactionControl.Address), createTransactionControl.Amount, &unspentTransaction, s.Account)
 			s.Client.BroadcastTransaction(transaction)
 			*s.TransactionPool = append(*s.TransactionPool, transaction)
 
@@ -213,7 +216,7 @@ func (s *Server) HandleServer(port string) {
 				return
 			}
 
-			t := coin.Transaction{}
+			t := wallet.Transaction{}
 			err = json.Unmarshal(b, &t)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -231,6 +234,6 @@ func (s *Server) HandleServer(port string) {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
 }
 
-func updateUnspentTxOutputs(newTransactions *[]coin.Transaction, unspentTxOuts *map[string]coin.UnspentTxOut) {
+func updateUnspentTxOutputs(newTransactions *[]wallet.Transaction, unspentTxOuts *map[string]wallet.UTxOut) {
 	// in here loop through transactions and update unspentTxOuts
 }

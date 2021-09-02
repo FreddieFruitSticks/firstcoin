@@ -1,4 +1,4 @@
-package coin
+package wallet
 
 import (
 	"blockchain/utils"
@@ -38,7 +38,6 @@ func (a *Account) GenerateKeyPair() {
 		os.Exit(1)
 	}
 	a.PrivateKeyObject = privatekey
-
 	publickey := &privatekey.PublicKey
 	a.PublicKeyObject = publickey
 
@@ -80,7 +79,7 @@ func (a *Account) GenerateKeyPair() {
 		os.Exit(1)
 	}
 
-	pk := make([]byte, 2048)
+	pk := make([]byte, 418)
 
 	_, err = buffer.Read(pk)
 	utils.CheckError(err)
@@ -115,13 +114,4 @@ func (a *Account) VerifySignature(signature []byte, pk *rsa.PublicKey) bool {
 	}
 
 	return true
-}
-
-// This is just a SHA of all the transaction data
-func generateTransactionID(address []byte, amount int, uTxOId string, uTxOIndex int) []byte {
-	msgHash := sha256.New()
-	_, err := msgHash.Write([]byte(fmt.Sprintf("%s%d%s%d", address, amount, uTxOId, uTxOIndex)))
-	utils.CheckError(err)
-
-	return msgHash.Sum(nil)
 }
