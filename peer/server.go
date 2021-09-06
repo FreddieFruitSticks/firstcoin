@@ -260,15 +260,23 @@ func (s *Server) UpdateUnspentTxOutputs(block coin.Block) {
 func (s *Server) UpdateUTxOWithCoinbaseTransaction(block coin.Block) bool {
 	coinbaseTx := (block.Transactions)[0]
 
-	txIDMap := make(map[string]wallet.UTxOut)
-	txIDMap[string(coinbaseTx.ID)] = wallet.UTxOut{
+	ownerUTxOs := (*s.UTxOs)[string(coinbaseTx.TxOuts[0].Address)]
+	uTxO := wallet.UTxOut{
 		ID:      coinbaseTx.ID,
 		Index:   block.Index,
 		Address: coinbaseTx.TxOuts[0].Address,
 		Amount:  coinbaseTx.TxOuts[0].Amount,
 	}
 
-	(*s.UTxOs)[string(coinbaseTx.TxOuts[0].Address)] = txIDMap
+	if ownerUTxOs == nil {
+		txIDMap := make(map[string]wallet.UTxOut)
+		txIDMap[string(coinbaseTx.ID)] = uTxO
+		ownerUTxOs = txIDMap
+	} else {
+		ownerUTxOs[string(coinbaseTx.ID)] = uTxO
+	}
+
+	(*s.UTxOs)[string(coinbaseTx.TxOuts[0].Address)] = ownerUTxOs
 
 	return true
 }
