@@ -12,14 +12,15 @@ import (
 	"net/http"
 )
 
+// TODO remove all non-server related stuff to a new package - need refactor
 type Server struct {
-	Peers           *Peers
-	ThisPeer        string
-	Client          *Client
-	Account         *wallet.Account
-	Blockchain      *coin.Blockchain
-	TransactionPool *[]wallet.Transaction
-	UTxOs           *map[string]wallet.UTxOut
+	Peers                      *Peers
+	ThisPeer                   string
+	Client                     *Client
+	Account                    *wallet.Account
+	Blockchain                 *coin.Blockchain
+	UnconfirmedTransactionPool *[]wallet.Transaction
+	UTxOs                      *map[string]map[string]wallet.UTxOut
 }
 
 type BlockDataControl struct {
@@ -39,8 +40,8 @@ type errorMessage struct {
 	ErrorMessage string `json:"errorMessage"`
 }
 
-func NewServer(p *Peers, c *Client, b *coin.Blockchain, a *wallet.Account, t string, uTxO *map[string]wallet.UTxOut, tp *[]wallet.Transaction) *Server {
-	return &Server{Peers: p, Client: c, Blockchain: b, Account: a, ThisPeer: t, UTxOs: uTxO, TransactionPool: tp}
+func NewServer(p *Peers, c *Client, b *coin.Blockchain, a *wallet.Account, t string, uTxO *map[string]map[string]wallet.UTxOut, tp *[]wallet.Transaction) *Server {
+	return &Server{Peers: p, Client: c, Blockchain: b, Account: a, ThisPeer: t, UTxOs: uTxO, UnconfirmedTransactionPool: tp}
 }
 
 func (s *Server) HandleServer(port string) {
@@ -64,27 +65,41 @@ func (s *Server) HandleServer(port string) {
 				return
 			}
 
-			block := s.Blockchain.GenerateNextBlock(s.TransactionPool)
+			// coinbase transaction is the first transaction included by the miner
+			coinbaseTransaction := wallet.CreateCoinbaseTransaction(*s.Account, s.Blockchain.GetLastBlock().Index+1)
+			transactionPool := make([]wallet.Transaction, 0)
+			transactionPool = append(transactionPool, coinbaseTransaction)
+			transactionPool = append(transactionPool, *s.UnconfirmedTransactionPool...)
+
+			block := s.Blockchain.GenerateNextBlock(&transactionPool)
 
 			valid := block.IsValidBlock(s.Blockchain.GetLastBlock())
 			if !valid {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				err = json.NewEncoder(w).Encode("Block not valid")
-				return
 
+				return
 			}
 
 			s.Blockchain.AddBlock(block)
 			s.Client.BroadcastBlock(block, s.ThisPeer)
 
-			updateUnspentTxOutputs(s.TransactionPool, s.UTxOs)
+			s.UpdateUnspentTxOutputs(block)
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
 
+			payload := struct {
+				Blocks              []coin.Block                        `json:"blocks"`
+				UnspentTransactions map[string]map[string]wallet.UTxOut `json:"unspentTransactions"`
+			}{
+				Blocks:              s.Blockchain.Blocks,
+				UnspentTransactions: *s.UTxOs,
+			}
+
 			// byte arrays base64 encode and decode (on the other end). So the txOut address encodes as b64
-			err = json.NewEncoder(w).Encode(s.Blockchain.Blocks)
+			err = json.NewEncoder(w).Encode(payload)
 		}
 	})
 
@@ -103,7 +118,7 @@ func (s *Server) HandleServer(port string) {
 
 			if block.IsValidBlock(s.Blockchain.GetLastBlock()) && block.ValidTimestampToNow() {
 				s.Blockchain.AddBlock(block)
-				updateUnspentTxOutputs(&block.Transactions, s.UTxOs)
+				s.UpdateUnspentTxOutputs(block)
 				// TODO: when this node receives a valid block, it must remove transactions from its own pool that exist in the blocks transactions data
 			}
 		}
@@ -194,9 +209,7 @@ func (s *Server) HandleServer(port string) {
 
 			transaction := wallet.CreateTransaction([]byte(createTransactionControl.Address), createTransactionControl.Amount, &unspentTransaction, s.Account)
 			s.Client.BroadcastTransaction(transaction)
-			*s.TransactionPool = append(*s.TransactionPool, transaction)
-
-			fmt.Println((*s.TransactionPool))
+			*s.UnconfirmedTransactionPool = append(*s.UnconfirmedTransactionPool, transaction)
 
 			w.WriteHeader(http.StatusOK)
 			err = json.NewEncoder(w).Encode(createTransactionControl)
@@ -224,7 +237,7 @@ func (s *Server) HandleServer(port string) {
 				return
 			}
 
-			*s.TransactionPool = append(*s.TransactionPool, t)
+			*s.UnconfirmedTransactionPool = append(*s.UnconfirmedTransactionPool, t)
 
 			err = json.NewEncoder(w).Encode(t)
 			utils.CheckError(err)
@@ -234,6 +247,28 @@ func (s *Server) HandleServer(port string) {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
 }
 
-func updateUnspentTxOutputs(newTransactions *[]wallet.Transaction, unspentTxOuts *map[string]wallet.UTxOut) {
+func (s *Server) UpdateUnspentTxOutputs(block coin.Block) {
+	// At this point assume each transaction is valid - checked previously
+
+	s.UpdateUTxOWithCoinbaseTransaction(block)
+
+	for _, _ = range (block.Transactions)[1:] {
+	}
 	// in here loop through transactions and update unspentTxOuts
+}
+
+func (s *Server) UpdateUTxOWithCoinbaseTransaction(block coin.Block) bool {
+	coinbaseTx := (block.Transactions)[0]
+
+	txIDMap := make(map[string]wallet.UTxOut)
+	txIDMap[string(coinbaseTx.ID)] = wallet.UTxOut{
+		ID:      coinbaseTx.ID,
+		Index:   block.Index,
+		Address: coinbaseTx.TxOuts[0].Address,
+		Amount:  coinbaseTx.TxOuts[0].Amount,
+	}
+
+	(*s.UTxOs)[string(coinbaseTx.TxOuts[0].Address)] = txIDMap
+
+	return true
 }

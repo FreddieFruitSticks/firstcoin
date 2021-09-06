@@ -25,7 +25,7 @@ func main() {
 	args := os.Args[1:]
 	port := args[0]
 
-	unspentTxOuts := make(map[string]wallet.UTxOut, 0)
+	unspentTxOuts := make(map[string]map[string]wallet.UTxOut, 0)
 	blocks := make([]coin.Block, 0)
 	blockchain := coin.NewBlockchain(blocks)
 
@@ -34,14 +34,23 @@ func main() {
 	client := peer.NewClient(peers, blockchain, thisPeer)
 	account := wallet.NewAccount()
 	account.GenerateKeyPair()
-
-	transactionPool := wallet.CreateNewTransactionPool(account.PublicKey, *account)
+	transactionPool := make([]wallet.Transaction, 0)
 
 	if isSeedHost(port) {
-		blockchain.AddBlock(coin.GenesisBlock(seedDifficultyLevel))
+		genesisTransactionPool := make([]wallet.Transaction, 0)
+
+		// coinbase transaction is the first transaction included by the miner
+		coinbaseTransaction := wallet.CreateCoinbaseTransaction(*account, 0)
+		genesisTransactionPool = append(genesisTransactionPool, coinbaseTransaction)
+
+		blockchain.AddBlock(coin.GenesisBlock(seedDifficultyLevel, genesisTransactionPool))
 	} else {
 		p := client.GetPeers()
-		client.QueryPeers(p)
+		err := client.QueryPeers(p)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 
 		fmt.Println(p)
 		client.BroadcastOnline(thisPeer)

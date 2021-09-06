@@ -87,13 +87,8 @@ func (a *Account) GenerateKeyPair() {
 	a.PublicKey = pk
 }
 
-func (a *Account) GenerateSignature(msg []byte) []byte {
-	msgHash := sha256.New()
-	_, err := msgHash.Write(msg)
-	if err != nil {
-		panic(err)
-	}
-	msgHashSum := msgHash.Sum(nil)
+func (a *Account) GenerateSignature(message []byte) []byte {
+	msgHashSum := hashMessage(message)
 
 	// In order to generate the signature, we provide a random number generator,
 	// our private key, the hashing algorithm that we used, and the hash sum
@@ -106,12 +101,31 @@ func (a *Account) GenerateSignature(msg []byte) []byte {
 	return signature
 }
 
-func (a *Account) VerifySignature(signature []byte, pk *rsa.PublicKey) bool {
-	err := rsa.VerifyPSS(pk, crypto.SHA256, a.MessageHashSum, signature, nil)
+func (a *Account) VerifySignature(signature []byte, publicKey []byte, message []byte) (bool, error) {
+	pemBlock, _ := pem.Decode(publicKey)
+
+	pk, err := x509.ParsePKCS1PublicKey(pemBlock.Bytes)
 	if err != nil {
-		fmt.Println("could not verify signature: ", err)
-		return false
+		return false, fmt.Errorf("could not parse public key %+v", err)
 	}
 
-	return true
+	msgHashSum := hashMessage(message)
+
+	err = rsa.VerifyPSS(pk, crypto.SHA256, msgHashSum, signature, nil)
+	if err != nil {
+		fmt.Println("could not verify signature: ", err)
+		return false, err
+	}
+
+	return true, nil
+}
+
+func hashMessage(msg []byte) []byte {
+	msgHash := sha256.New()
+	_, err := msgHash.Write(msg)
+	if err != nil {
+		panic(err)
+	}
+
+	return msgHash.Sum(nil)
 }
