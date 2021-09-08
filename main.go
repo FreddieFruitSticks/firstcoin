@@ -3,6 +3,7 @@ package main
 import (
 	"blockchain/coin"
 	"blockchain/peer"
+	"blockchain/service"
 	"blockchain/wallet"
 	"fmt"
 	"os"
@@ -56,7 +57,9 @@ func main() {
 
 	peers.AddHostname(thisPeer)
 
-	server := peer.NewServer(peers, client, blockchain, account, thisPeer, &unspentTxOuts, &transactionPool)
+	service := service.NewBlockchainService(account, blockchain, &transactionPool, &unspentTxOuts)
+
+	server := peer.NewServer(service, peers, client)
 
 	server.HandleServer(args[0])
 }

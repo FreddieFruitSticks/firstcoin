@@ -141,7 +141,6 @@ func (c *Client) QueryPeers(peers map[string]string) error {
 	}
 
 	return nil
-
 }
 
 func (c *Client) BroadcastOnline(thisHostname string) {

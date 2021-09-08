@@ -2,6 +2,7 @@ package peer
 
 import (
 	"blockchain/coin"
+	"blockchain/service"
 	"blockchain/utils"
 	"blockchain/wallet"
 	"encoding/json"
@@ -14,13 +15,9 @@ import (
 
 // TODO remove all non-server related stuff to a new package - need refactor
 type Server struct {
-	Peers                      *Peers
-	ThisPeer                   string
-	Client                     *Client
-	Account                    *wallet.Account
-	Blockchain                 *coin.Blockchain
-	UnconfirmedTransactionPool *[]wallet.Transaction
-	UTxOs                      *map[string]map[string]wallet.UTxOut
+	Peers             *Peers
+	Client            *Client
+	BlockchainService service.BlockchainService
 }
 
 type BlockDataControl struct {
@@ -40,8 +37,12 @@ type errorMessage struct {
 	ErrorMessage string `json:"errorMessage"`
 }
 
-func NewServer(p *Peers, c *Client, b *coin.Blockchain, a *wallet.Account, t string, uTxO *map[string]map[string]wallet.UTxOut, tp *[]wallet.Transaction) *Server {
-	return &Server{Peers: p, Client: c, Blockchain: b, Account: a, ThisPeer: t, UTxOs: uTxO, UnconfirmedTransactionPool: tp}
+func NewServer(s service.BlockchainService, p *Peers, c *Client) *Server {
+	return &Server{
+		BlockchainService: s,
+		Peers:             p,
+		Client:            c,
+	}
 }
 
 func (s *Server) HandleServer(port string) {
@@ -49,7 +50,7 @@ func (s *Server) HandleServer(port string) {
 		fmt.Fprintf(w, "pong from, %q", html.EscapeString(r.URL.Path))
 	})
 
-	// control node
+	// control endpoint
 	http.HandleFunc("/create-block", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
@@ -65,15 +66,7 @@ func (s *Server) HandleServer(port string) {
 				return
 			}
 
-			// coinbase transaction is the first transaction included by the miner
-			coinbaseTransaction := wallet.CreateCoinbaseTransaction(*s.Account, s.Blockchain.GetLastBlock().Index+1)
-			transactionPool := make([]wallet.Transaction, 0)
-			transactionPool = append(transactionPool, coinbaseTransaction)
-			transactionPool = append(transactionPool, *s.UnconfirmedTransactionPool...)
-
-			block := s.Blockchain.GenerateNextBlock(&transactionPool)
-
-			valid := block.IsValidBlock(s.Blockchain.GetLastBlock())
+			valid, block, blockchain, uTxOs := s.BlockchainService.CreateNextBlock()
 			if !valid {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
@@ -82,21 +75,18 @@ func (s *Server) HandleServer(port string) {
 				return
 			}
 
-			s.Blockchain.AddBlock(block)
-			s.Client.BroadcastBlock(block, s.ThisPeer)
-
-			s.UpdateUnspentTxOutputs(block)
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
+			s.Client.BroadcastBlock(*block, s.Client.ThisPeer)
 
 			payload := struct {
 				Blocks              []coin.Block                        `json:"blocks"`
 				UnspentTransactions map[string]map[string]wallet.UTxOut `json:"unspentTransactions"`
 			}{
-				Blocks:              s.Blockchain.Blocks,
-				UnspentTransactions: *s.UTxOs,
+				Blocks:              blockchain.Blocks,
+				UnspentTransactions: *uTxOs,
 			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
 
 			// byte arrays base64 encode and decode (on the other end). So the txOut address encodes as b64
 			err = json.NewEncoder(w).Encode(payload)
@@ -106,8 +96,6 @@ func (s *Server) HandleServer(port string) {
 	http.HandleFunc("/block", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
 
 			b, err := ioutil.ReadAll(r.Body)
 			utils.CheckError(err)
@@ -116,11 +104,17 @@ func (s *Server) HandleServer(port string) {
 			err = json.Unmarshal(b, &block)
 			utils.CheckError(err)
 
-			if block.IsValidBlock(s.Blockchain.GetLastBlock()) && block.ValidTimestampToNow() {
-				s.Blockchain.AddBlock(block)
-				s.UpdateUnspentTxOutputs(block)
-				// TODO: when this node receives a valid block, it must remove transactions from its own pool that exist in the blocks transactions data
+			hasUpdated := s.BlockchainService.AddBlockToBlockchain(block)
+
+			if hasUpdated {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusCreated)
+			} else {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				err = json.NewEncoder(w).Encode("Could not update blockchain")
 			}
+
 		}
 	})
 
@@ -130,7 +124,7 @@ func (s *Server) HandleServer(port string) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 
-			err := json.NewEncoder(w).Encode(s.Blockchain)
+			err := json.NewEncoder(w).Encode(s.BlockchainService.Blockchain)
 			utils.CheckError(err)
 
 		}
@@ -174,14 +168,14 @@ func (s *Server) HandleServer(port string) {
 		case "GET":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			latestBlock := s.Blockchain.Blocks[len(s.Blockchain.Blocks)-1]
+			latestBlock := s.BlockchainService.Blockchain.Blocks[len(s.BlockchainService.Blockchain.Blocks)-1]
 
 			err := json.NewEncoder(w).Encode(latestBlock)
 			utils.CheckError(err)
 		}
 	})
 
-	// control node
+	// control endpoint
 	http.HandleFunc("/create-transaction", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
@@ -202,14 +196,9 @@ func (s *Server) HandleServer(port string) {
 				return
 			}
 
-			unspentTransaction := wallet.UTxOut{
-				Address: []byte("1235asasdasda"),
-				Amount:  1000,
-			}
+			transaction := s.BlockchainService.CreateTransaction([]byte(createTransactionControl.Address), createTransactionControl.Amount)
 
-			transaction := wallet.CreateTransaction([]byte(createTransactionControl.Address), createTransactionControl.Amount, &unspentTransaction, s.Account)
 			s.Client.BroadcastTransaction(transaction)
-			*s.UnconfirmedTransactionPool = append(*s.UnconfirmedTransactionPool, transaction)
 
 			w.WriteHeader(http.StatusOK)
 			err = json.NewEncoder(w).Encode(createTransactionControl)
@@ -237,7 +226,7 @@ func (s *Server) HandleServer(port string) {
 				return
 			}
 
-			*s.UnconfirmedTransactionPool = append(*s.UnconfirmedTransactionPool, t)
+			*s.BlockchainService.UnconfirmedTransactionPool = append(*s.BlockchainService.UnconfirmedTransactionPool, t)
 
 			err = json.NewEncoder(w).Encode(t)
 			utils.CheckError(err)
@@ -245,38 +234,4 @@ func (s *Server) HandleServer(port string) {
 	})
 
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
-}
-
-func (s *Server) UpdateUnspentTxOutputs(block coin.Block) {
-	// At this point assume each transaction is valid - checked previously
-
-	s.UpdateUTxOWithCoinbaseTransaction(block)
-
-	for _, _ = range (block.Transactions)[1:] {
-	}
-	// in here loop through transactions and update unspentTxOuts
-}
-
-func (s *Server) UpdateUTxOWithCoinbaseTransaction(block coin.Block) bool {
-	coinbaseTx := (block.Transactions)[0]
-
-	ownerUTxOs := (*s.UTxOs)[string(coinbaseTx.TxOuts[0].Address)]
-	uTxO := wallet.UTxOut{
-		ID:      coinbaseTx.ID,
-		Index:   block.Index,
-		Address: coinbaseTx.TxOuts[0].Address,
-		Amount:  coinbaseTx.TxOuts[0].Amount,
-	}
-
-	if ownerUTxOs == nil {
-		txIDMap := make(map[string]wallet.UTxOut)
-		txIDMap[string(coinbaseTx.ID)] = uTxO
-		ownerUTxOs = txIDMap
-	} else {
-		ownerUTxOs[string(coinbaseTx.ID)] = uTxO
-	}
-
-	(*s.UTxOs)[string(coinbaseTx.TxOuts[0].Address)] = ownerUTxOs
-
-	return true
 }
