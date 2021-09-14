@@ -195,6 +195,7 @@ func areValidTransactions(block Block) bool {
 		return false
 	}
 
+	// first transaction in the list is always the coinbase transaction
 	coinbaseTransaction := block.Transactions[0]
 
 	if !isValidCoinbaseTransaction(coinbaseTransaction, block.Index) {

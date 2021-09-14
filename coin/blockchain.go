@@ -70,7 +70,8 @@ func (b *Blockchain) cumulativeDifficulty() int {
 	return cumulativeDifficulty
 }
 
-// Difficulty level is decreased by 1 if time between last 10 blocks > 200s, and increased by 1 if time < 50s. This keeps it roughly 100s for 10 blocks
+// Difficulty level is decreased by 1 if time between last 10 blocks > 200s (twice DIFFICULTY_ADJUSTMENT_INTERVAL * BLOCK_GENERATION_INTERVAL),
+// and increased by 1 if time < 50s (half DIFFICULTY_ADJUSTMENT_INTERVAL * BLOCK_GENERATION_INTERVAL). This keeps it roughly 100s for 10 blocks
 func (b *Blockchain) getDifficultyLevel() int {
 	if b.GetLastBlock().Index%DIFFICULTY_ADJUSTMENT_INTERVAL == 0 && b.GetLastBlock().Index != 0 {
 		fmt.Println((b.GetLastBlock().Timestamp - b.Blocks[len(b.Blocks)-DIFFICULTY_ADJUSTMENT_INTERVAL].Timestamp) / NANO_SECONDS)
