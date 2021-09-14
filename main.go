@@ -58,8 +58,9 @@ func main() {
 	peers.AddHostname(thisPeer)
 
 	service := service.NewBlockchainService(account, blockchain, &transactionPool, &unspentTxOuts)
+	coinServerHandler := peer.NewCoinServerHandler(service, client, peers)
 
-	server := peer.NewServer(service, peers, client)
+	server := peer.NewServer(service, peers, client, *coinServerHandler)
 
 	server.HandleServer(args[0])
 }

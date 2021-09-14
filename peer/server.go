@@ -1,14 +1,10 @@
 package peer
 
 import (
-	"blockchain/coin"
 	"blockchain/service"
-	"blockchain/utils"
-	"blockchain/wallet"
 	"encoding/json"
 	"fmt"
 	"html"
-	"io/ioutil"
 	"log"
 	"net/http"
 )
@@ -18,6 +14,7 @@ type Server struct {
 	Peers             *Peers
 	Client            *Client
 	BlockchainService service.BlockchainService
+	CoinServerHandler CoinServerHandler
 }
 
 type BlockDataControl struct {
@@ -37,11 +34,12 @@ type errorMessage struct {
 	ErrorMessage string `json:"errorMessage"`
 }
 
-func NewServer(s service.BlockchainService, p *Peers, c *Client) *Server {
+func NewServer(s service.BlockchainService, p *Peers, c *Client, cs CoinServerHandler) *Server {
 	return &Server{
 		BlockchainService: s,
 		Peers:             p,
 		Client:            c,
+		CoinServerHandler: cs,
 	}
 }
 
@@ -50,188 +48,81 @@ func (s *Server) HandleServer(port string) {
 		fmt.Fprintf(w, "pong from, %q", html.EscapeString(r.URL.Path))
 	})
 
-	// control endpoint
-	http.HandleFunc("/create-block", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			b, err := ioutil.ReadAll(r.Body)
-			utils.CheckError(err)
+	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock))             // control endpoint
+	http.HandleFunc("/create-transaction", JSONHandler(s.CoinServerHandler.createTransaction)) // control endpoint
 
-			data := BlockDataControl{}
-			err = json.Unmarshal(b, &data)
-			if err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				err = json.NewEncoder(w).Encode(err)
-				return
-			}
-
-			valid, block, blockchain, uTxOs := s.BlockchainService.CreateNextBlock()
-			if !valid {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				err = json.NewEncoder(w).Encode("Block not valid")
-
-				return
-			}
-
-			s.Client.BroadcastBlock(*block, s.Client.ThisPeer)
-
-			payload := struct {
-				Blocks              []coin.Block                        `json:"blocks"`
-				UnspentTransactions map[string]map[string]wallet.UTxOut `json:"unspentTransactions"`
-			}{
-				Blocks:              blockchain.Blocks,
-				UnspentTransactions: *uTxOs,
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-
-			// byte arrays base64 encode and decode (on the other end). So the txOut address encodes as b64
-			err = json.NewEncoder(w).Encode(payload)
-		}
-	})
-
-	http.HandleFunc("/block", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-
-			b, err := ioutil.ReadAll(r.Body)
-			utils.CheckError(err)
-
-			block := coin.Block{}
-			err = json.Unmarshal(b, &block)
-			utils.CheckError(err)
-
-			hasUpdated := s.BlockchainService.AddBlockToBlockchain(block)
-
-			if hasUpdated {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusCreated)
-			} else {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusInternalServerError)
-				err = json.NewEncoder(w).Encode("Could not update blockchain")
-			}
-
-		}
-	})
-
-	http.HandleFunc("/block-chain", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "GET":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-
-			err := json.NewEncoder(w).Encode(s.BlockchainService.Blockchain)
-			utils.CheckError(err)
-
-		}
-	})
-
-	http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "GET":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-
-			err := json.NewEncoder(w).Encode(s.Peers.Hostnames)
-			utils.CheckError(err)
-		}
-	})
-
-	http.HandleFunc("/notify", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-
-			b, err := ioutil.ReadAll(r.Body)
-			utils.CheckError(err)
-
-			fmt.Println(string(b))
-
-			t := HostName{}
-			err = json.Unmarshal(b, &t)
-			utils.CheckError(err)
-
-			s.Peers.AddHostname(t.Hostname)
-
-			err = json.NewEncoder(w).Encode(s.Peers.Hostnames)
-			utils.CheckError(err)
-		}
-	})
-
-	http.HandleFunc("/latest-block", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "GET":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			latestBlock := s.BlockchainService.Blockchain.Blocks[len(s.BlockchainService.Blockchain.Blocks)-1]
-
-			err := json.NewEncoder(w).Encode(latestBlock)
-			utils.CheckError(err)
-		}
-	})
-
-	// control endpoint
-	http.HandleFunc("/create-transaction", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			w.Header().Set("Content-Type", "application/json")
-
-			b, err := ioutil.ReadAll(r.Body)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				err = json.NewEncoder(w).Encode(err)
-				return
-			}
-
-			createTransactionControl := CreateTransactionControl{}
-			err = json.Unmarshal(b, &createTransactionControl)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				err = json.NewEncoder(w).Encode(err)
-				return
-			}
-
-			transaction := s.BlockchainService.CreateTransaction([]byte(createTransactionControl.Address), createTransactionControl.Amount)
-
-			s.Client.BroadcastTransaction(transaction)
-
-			w.WriteHeader(http.StatusOK)
-			err = json.NewEncoder(w).Encode(createTransactionControl)
-			utils.CheckError(err)
-		}
-	})
-
-	http.HandleFunc("/transaction", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			b, err := ioutil.ReadAll(r.Body)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				err = json.NewEncoder(w).Encode(err)
-				return
-			}
-
-			t := wallet.Transaction{}
-			err = json.Unmarshal(b, &t)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				err = json.NewEncoder(w).Encode(err)
-				return
-			}
-
-			*s.BlockchainService.UnconfirmedTransactionPool = append(*s.BlockchainService.UnconfirmedTransactionPool, t)
-
-			err = json.NewEncoder(w).Encode(t)
-			utils.CheckError(err)
-		}
-	})
+	http.HandleFunc("/block", JSONHandler(s.CoinServerHandler.addBlockToBlockchain))
+	http.HandleFunc("/block-chain", JSONHandler(s.CoinServerHandler.blockChain))
+	http.HandleFunc("/peers", JSONHandler(s.CoinServerHandler.peers))
+	http.HandleFunc("/notify", JSONHandler(s.CoinServerHandler.peers))
+	http.HandleFunc("/latest-block", JSONHandler(s.CoinServerHandler.latestBlock))
+	http.HandleFunc("/transaction", JSONHandler(s.CoinServerHandler.transaction))
 
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
+}
+
+type ServiceHandler func(*http.Request) (*HTTPResponse, *HTTPError)
+
+func JSONHandler(service ServiceHandler) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		httpResponse, err := service(request)
+
+		writer.Header().Set("X-Content-Type-Options", "nosniff")
+
+		if err != nil {
+			writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+			writer.WriteHeader(err.Code)
+
+			err := json.NewEncoder(writer).Encode(ErrorResponse{
+				Type:    "error",
+				Message: err.Error(),
+			})
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			return
+		}
+
+		writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		for key, value := range httpResponse.Headers {
+			writer.Header().Set(key, value)
+		}
+
+		writer.WriteHeader(httpResponse.StatusCode)
+		encodeErr := json.NewEncoder(writer).Encode(httpResponse.Body)
+		if encodeErr != nil {
+			fmt.Println(encodeErr)
+		}
+	}
+}
+
+type HTTPResponse struct {
+	StatusCode int
+	Body       interface{}
+	Headers    map[string]string
+}
+
+type HTTPError struct {
+	Code    int
+	Message string
+}
+
+func (httpError *HTTPError) Error() string {
+	return httpError.Message
+}
+
+// nolint: unused
+func (httpError *HTTPError) ErrorCode() int {
+	return httpError.Code
+}
+
+func NewHTTPError(code int, message string, args ...interface{}) *HTTPError {
+	return &HTTPError{Code: code, Message: fmt.Sprintf(message, args...)}
+}
+
+type ErrorResponse struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
 }
