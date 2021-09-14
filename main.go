@@ -60,7 +60,7 @@ func main() {
 	service := service.NewBlockchainService(account, blockchain, &transactionPool, &unspentTxOuts)
 	coinServerHandler := peer.NewCoinServerHandler(service, client, peers)
 
-	server := peer.NewServer(service, peers, client, *coinServerHandler)
+	server := peer.NewServer(*coinServerHandler)
 
 	server.HandleServer(args[0])
 }

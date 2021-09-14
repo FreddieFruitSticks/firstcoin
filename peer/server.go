@@ -1,7 +1,6 @@
 package peer
 
 import (
-	"blockchain/service"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -11,34 +10,11 @@ import (
 
 // TODO remove all non-server related stuff to a new package - need refactor
 type Server struct {
-	Peers             *Peers
-	Client            *Client
-	BlockchainService service.BlockchainService
 	CoinServerHandler CoinServerHandler
 }
 
-type BlockDataControl struct {
-	Data string `json:"data"`
-}
-
-type HostName struct {
-	Hostname string `json:"hostName"`
-}
-
-type CreateTransactionControl struct {
-	Address string `json:"address"`
-	Amount  int    `json:"amount"`
-}
-
-type errorMessage struct {
-	ErrorMessage string `json:"errorMessage"`
-}
-
-func NewServer(s service.BlockchainService, p *Peers, c *Client, cs CoinServerHandler) *Server {
+func NewServer(cs CoinServerHandler) *Server {
 	return &Server{
-		BlockchainService: s,
-		Peers:             p,
-		Client:            c,
 		CoinServerHandler: cs,
 	}
 }

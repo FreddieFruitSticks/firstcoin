@@ -166,7 +166,6 @@ func (c *CoinServerHandler) addBlockToBlockchain(r *http.Request) (*HTTPResponse
 				Message: "Could not update blockchain",
 			}
 		}
-
 	}
 
 	return nil, &HTTPError{
@@ -227,4 +226,17 @@ func readBody(request *http.Request, params interface{}) error {
 	}
 
 	return nil
+}
+
+type BlockDataControl struct {
+	Data string `json:"data"`
+}
+
+type HostName struct {
+	Hostname string `json:"hostName"`
+}
+
+type CreateTransactionControl struct {
+	Address string `json:"address"`
+	Amount  int    `json:"amount"`
 }
