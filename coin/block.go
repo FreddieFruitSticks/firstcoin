@@ -87,7 +87,7 @@ func (b *Block) IsValidBlock(previousBlock Block) bool {
 		return false
 	}
 
-	if !areValidTransactions(*b) {
+	if !wallet.AreValidTransactions(b.Transactions, b.Index) {
 		fmt.Println("Invalid block - invalid transactions")
 		return false
 	}
@@ -188,52 +188,4 @@ func concatTransactionIDs(transactions []wallet.Transaction) []byte {
 	}
 
 	return msgHash.Sum(nil)
-}
-
-func areValidTransactions(block Block) bool {
-	if len(block.Transactions) == 0 {
-		return false
-	}
-
-	// first transaction in the list is always the coinbase transaction
-	coinbaseTransaction := block.Transactions[0]
-
-	if !isValidCoinbaseTransaction(coinbaseTransaction, block.Index) {
-		return false
-	}
-
-	// for _, transaction := range block.Transactions[1:] {
-
-	// }
-
-	return true
-}
-
-func isValidCoinbaseTransaction(transaction wallet.Transaction, blockIndex int) bool {
-	if len(transaction.TxIns) != 1 {
-		fmt.Println("Invalid coinbase transaction txIns length > 0")
-		return false
-	}
-
-	if len(transaction.TxOuts) != 1 {
-		fmt.Println("Invalid coinbase transaction txOuts length > 0")
-		return false
-	}
-
-	if transaction.TxOuts[0].Amount != wallet.COINBASE_TRANSACTION_AMOUNT {
-		fmt.Println("Invalid coinbase transaction amount != COINBASE_TRANSACTION_AMOUNT")
-		return false
-	}
-
-	if transaction.TxIns[0].UTxOIndex != blockIndex {
-		fmt.Println("Invalid coinbase transaction amount != COINBASE_TRANSACTION_AMOUNT")
-		return false
-	}
-
-	tID := wallet.GenerateTransactionID(transaction)
-	if !reflect.DeepEqual(tID, transaction.ID) {
-		return false
-	}
-
-	return true
 }

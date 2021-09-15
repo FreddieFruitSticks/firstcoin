@@ -69,7 +69,7 @@ func createGenesisBlockchain(unspentTxOuts map[string]map[string]wallet.UTxOut, 
 	genesisTransactionPool := make([]wallet.Transaction, 0)
 
 	// coinbase transaction is the first transaction included by the miner
-	coinbaseTransaction := wallet.CreateCoinbaseTransaction(account, 0)
+	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(account, 0)
 	genesisTransactionPool = append(genesisTransactionPool, coinbaseTransaction)
 
 	uTxO := wallet.UTxOut{

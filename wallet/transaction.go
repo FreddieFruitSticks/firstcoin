@@ -4,6 +4,7 @@ import (
 	"blockchain/utils"
 	"crypto/sha256"
 	"fmt"
+	"reflect"
 	"strconv"
 	"time"
 )
@@ -24,7 +25,7 @@ type TxIn struct {
 	Signature []byte
 }
 
-// transcation ouput refers to the receiver of coins. Address is receiver's public key
+// transaction ouput refers to the receiver of coins. Address is receiver's public key
 type TxOut struct {
 	Address []byte
 	Amount  int
@@ -68,22 +69,22 @@ func CreateTransaction(address []byte, amount int, uTxO *UTxOut, a *Account) Tra
 	now := int(time.Now().UnixNano())
 
 	// Generate the transaction id from the tx inputs (without signature) and tx outputs
-	txSignature := GenerateTransactionID(transaction)
-	transaction.ID = txSignature
+	txID := GenerateTransactionID(transaction)
+	transaction.ID = txID
 
 	// tx input signature is the tx id signed by the spender of coins
-	signature := a.GenerateSignature(txSignature)
+	signature := a.GenerateSignature(txID)
 	txIn.Signature = signature
 
 	return Transaction{
-		ID:        txSignature,
+		ID:        txID,
 		TxIns:     txIns,
 		TxOuts:    txOuts,
 		Timestamp: now,
 	}
 }
 
-func CreateCoinbaseTransaction(a Account, blockIndex int) Transaction {
+func CreateCoinbaseTransaction(a Account, blockIndex int) (Transaction, int) {
 	// First create the transaction with TxIns and TxOuts - tx id and txIn signature are not included yet
 	txIns := make([]TxIn, 0)
 	txOuts := make([]TxOut, 0)
@@ -117,7 +118,7 @@ func CreateCoinbaseTransaction(a Account, blockIndex int) Transaction {
 	txInSignature := a.GenerateSignature(txID)
 	txIns[0].Signature = txInSignature
 
-	return transaction
+	return transaction, now
 }
 
 // This is a SHA of all txIns (excluding signature - that gets added later) and txOuts
@@ -147,4 +148,62 @@ func (t Transaction) String() string {
 type prettyTxO struct {
 	Address string
 	Amount  int
+}
+
+func AreValidTransactions(transactions []Transaction, blockIndex int) bool {
+	if len(transactions) == 0 {
+		return false
+	}
+
+	// first transaction in the list is always the coinbase transaction
+	coinbaseTransaction := transactions[0]
+
+	if !IsValidCoinbaseTransaction(coinbaseTransaction, blockIndex) {
+		return false
+	}
+
+	// for _, transaction := range block.Transactions[1:] {
+
+	// }
+
+	return true
+}
+
+func IsValidTransaction(transaction Transaction, blockIndex int) bool {
+
+	tID := GenerateTransactionID(transaction)
+	if !reflect.DeepEqual(tID, transaction.ID) {
+		return false
+	}
+
+	return true
+}
+
+func IsValidCoinbaseTransaction(transaction Transaction, blockIndex int) bool {
+	if len(transaction.TxIns) != 1 {
+		fmt.Println("Invalid coinbase transaction txIns length > 0")
+		return false
+	}
+
+	if len(transaction.TxOuts) != 1 {
+		fmt.Println("Invalid coinbase transaction txOuts length > 0")
+		return false
+	}
+
+	if transaction.TxOuts[0].Amount != COINBASE_TRANSACTION_AMOUNT {
+		fmt.Println("Invalid coinbase transaction amount != COINBASE_TRANSACTION_AMOUNT")
+		return false
+	}
+
+	if transaction.TxIns[0].UTxOIndex != blockIndex {
+		fmt.Println("Invalid coinbase transaction amount != COINBASE_TRANSACTION_AMOUNT")
+		return false
+	}
+
+	tID := GenerateTransactionID(transaction)
+	if !reflect.DeepEqual(tID, transaction.ID) {
+		return false
+	}
+
+	return true
 }

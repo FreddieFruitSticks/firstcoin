@@ -44,9 +44,9 @@ func JSONHandler(service ServiceHandler) http.HandlerFunc {
 		httpResponse, err := service(request)
 
 		writer.Header().Set("X-Content-Type-Options", "nosniff")
+		writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 		if err != nil {
-			writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 			writer.WriteHeader(err.Code)
 
 			err := json.NewEncoder(writer).Encode(ErrorResponse{
@@ -59,8 +59,6 @@ func JSONHandler(service ServiceHandler) http.HandlerFunc {
 
 			return
 		}
-
-		writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 		for key, value := range httpResponse.Headers {
 			writer.Header().Set(key, value)

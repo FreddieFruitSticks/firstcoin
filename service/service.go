@@ -23,7 +23,7 @@ func NewBlockchainService(a *wallet.Account, b *coin.Blockchain, u *[]wallet.Tra
 
 func (s *BlockchainService) CreateNextBlock() (bool, *coin.Block, *coin.Blockchain, *map[string]map[string]wallet.UTxOut) {
 	// coinbase transaction is the first transaction included by the miner
-	coinbaseTransaction := wallet.CreateCoinbaseTransaction(*s.Account, s.Blockchain.GetLastBlock().Index+1)
+	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(*s.Account, s.Blockchain.GetLastBlock().Index+1)
 	transactionPool := make([]wallet.Transaction, 0)
 	transactionPool = append(transactionPool, coinbaseTransaction)
 	transactionPool = append(transactionPool, *s.UnconfirmedTransactionPool...)
