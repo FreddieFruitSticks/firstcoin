@@ -185,7 +185,7 @@ func (c *CoinServerHandler) createBlock(r *http.Request) (*HTTPResponse, *HTTPEr
 			}
 		}
 
-		valid, block, blockchain, uTxOs := c.BlockchainService.CreateNextBlock()
+		valid, block, blockchain, uTxOSet := c.BlockchainService.CreateNextBlock()
 		if !valid {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
@@ -196,11 +196,11 @@ func (c *CoinServerHandler) createBlock(r *http.Request) (*HTTPResponse, *HTTPEr
 		c.Client.BroadcastBlock(*block, c.Client.ThisPeer)
 
 		payload := struct {
-			Blocks              []coin.Block                        `json:"blocks"`
-			UnspentTransactions map[string]map[string]wallet.UTxOut `json:"unspentTransactions"`
+			Blocks              []coin.Block                                                    `json:"blocks"`
+			UnspentTransactions map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO `json:"unspentTransactions"`
 		}{
 			Blocks:              blockchain.Blocks,
-			UnspentTransactions: *uTxOs,
+			UnspentTransactions: *uTxOSet,
 		}
 
 		return &HTTPResponse{

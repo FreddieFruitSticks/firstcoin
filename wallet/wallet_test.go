@@ -4,6 +4,7 @@ import (
 	"blockchain/wallet"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestCreateCoinbaseTransaction(t *testing.T) {
@@ -16,7 +17,10 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 		txIns := make([]wallet.TxIn, 0)
 		txOuts := make([]wallet.TxOut, 0)
 		txIn := wallet.TxIn{
-			UTxOID:    []byte{},
+			UTxOID: wallet.UTxOID{
+				Address: []byte{},
+				TxID:    []byte{},
+			},
 			UTxOIndex: 1,
 			Signature: []byte{},
 		}
@@ -72,12 +76,63 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 }
 
 func TestCreateTransaction(t *testing.T) {
-	t.Run("validate successful transaction", func(t *testing.T) {
-		account := wallet.NewAccount()
-		account.GenerateKeyPair()
+	t.Run("validate successful transaction - simple 1 input 1 output. Input perfectly adds up to output - no change", func(t *testing.T) {
 
-		// expectedTransaction := wallet.Transaction{
+		senderAccount := wallet.NewAccount()
+		senderAccount.GenerateKeyPair()
 
-		// }
+		receiverAccount := wallet.NewAccount()
+		receiverAccount.GenerateKeyPair()
+
+		uTxOSet := make(map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, 0)
+
+		txIns := make([]wallet.TxIn, 0)
+		txOuts := make([]wallet.TxOut, 0)
+
+		txIn := wallet.TxIn{
+			UTxOID: wallet.UTxOID{
+				Address: senderAccount.PublicKey,
+				TxID:    []byte{},
+			},
+			UTxOIndex: 1,
+			Signature: []byte{},
+		}
+		txIns = append(txIns, txIn)
+
+		txOutReceiver := wallet.TxOut{
+			Address: receiverAccount.PublicKey,
+			Amount:  100,
+		}
+		txOuts = append(txOuts, txOutReceiver)
+
+		expectedSenderTransaction := wallet.Transaction{
+			ID:        []byte{},
+			TxIns:     txIns,
+			TxOuts:    txOuts,
+			Timestamp: int(time.Now().UnixNano()),
+		}
+
+		txID := wallet.GenerateTransactionID(expectedSenderTransaction)
+
+		uTxO := wallet.UTxO{
+			ID:      txID,
+			Index:   1,
+			Address: senderAccount.PublicKey,
+			Amount:  200,
+		}
+
+		uTxOTxIDMap := make(map[wallet.TxIDType]wallet.UTxO)
+		uTxOTxIDMap[wallet.TxIDType(txID)] = uTxO
+		uTxOSet[wallet.PublicKeyAddressType(senderAccount.PublicKey)] = uTxOTxIDMap
+		senderWallet := wallet.NewWallet(uTxOSet)
+
+		expectedSenderTransaction.ID = txID
+
+		txIns[0].UTxOID.TxID = txID
+		txIns[0].Signature = senderAccount.GenerateSignature(txID)
+
+		if !senderWallet.IsValidTransaction(expectedSenderTransaction) {
+			t.Fatalf("expected transaction incorrectly constructed")
+		}
 	})
 }

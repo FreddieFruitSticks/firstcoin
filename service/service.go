@@ -9,19 +9,19 @@ type BlockchainService struct {
 	Account                    *wallet.Account
 	Blockchain                 *coin.Blockchain
 	UnconfirmedTransactionPool *[]wallet.Transaction
-	UTxOs                      *map[string]map[string]wallet.UTxOut
+	UTxOSet                    *wallet.UTxOSetType
 }
 
-func NewBlockchainService(a *wallet.Account, b *coin.Blockchain, u *[]wallet.Transaction, uTxO *map[string]map[string]wallet.UTxOut) BlockchainService {
+func NewBlockchainService(a *wallet.Account, b *coin.Blockchain, u *[]wallet.Transaction, uTxO *wallet.UTxOSetType) BlockchainService {
 	return BlockchainService{
 		Account:                    a,
 		Blockchain:                 b,
 		UnconfirmedTransactionPool: u,
-		UTxOs:                      uTxO,
+		UTxOSet:                    uTxO,
 	}
 }
 
-func (s *BlockchainService) CreateNextBlock() (bool, *coin.Block, *coin.Blockchain, *map[string]map[string]wallet.UTxOut) {
+func (s *BlockchainService) CreateNextBlock() (bool, *coin.Block, *coin.Blockchain, *wallet.UTxOSetType) {
 	// coinbase transaction is the first transaction included by the miner
 	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(*s.Account, s.Blockchain.GetLastBlock().Index+1)
 	transactionPool := make([]wallet.Transaction, 0)
@@ -39,7 +39,7 @@ func (s *BlockchainService) CreateNextBlock() (bool, *coin.Block, *coin.Blockcha
 
 	s.UpdateUnspentTxOutputs(block)
 
-	return true, &block, s.Blockchain, s.UTxOs
+	return true, &block, s.Blockchain, s.UTxOSet
 }
 
 func (s *BlockchainService) UpdateUnspentTxOutputs(block coin.Block) {
@@ -55,23 +55,23 @@ func (s *BlockchainService) UpdateUnspentTxOutputs(block coin.Block) {
 func (s *BlockchainService) UpdateUTxOWithCoinbaseTransaction(block coin.Block) bool {
 	coinbaseTx := (block.Transactions)[0]
 
-	ownerUTxOs := (*s.UTxOs)[string(coinbaseTx.TxOuts[0].Address)]
-	uTxO := wallet.UTxOut{
+	receiverUTxOs := (*s.UTxOSet)[wallet.PublicKeyAddressType(coinbaseTx.TxOuts[0].Address)]
+	uTxO := wallet.UTxO{
 		ID:      coinbaseTx.ID,
 		Index:   block.Index,
 		Address: coinbaseTx.TxOuts[0].Address,
 		Amount:  coinbaseTx.TxOuts[0].Amount,
 	}
 
-	if ownerUTxOs == nil {
-		txIDMap := make(map[string]wallet.UTxOut)
-		txIDMap[string(coinbaseTx.ID)] = uTxO
-		ownerUTxOs = txIDMap
+	if receiverUTxOs == nil {
+		txIDMap := make(map[wallet.TxIDType]wallet.UTxO)
+		txIDMap[wallet.TxIDType(coinbaseTx.ID)] = uTxO
+		receiverUTxOs = txIDMap
 	} else {
-		ownerUTxOs[string(coinbaseTx.ID)] = uTxO
+		receiverUTxOs[wallet.TxIDType(coinbaseTx.ID)] = uTxO
 	}
 
-	(*s.UTxOs)[string(coinbaseTx.TxOuts[0].Address)] = ownerUTxOs
+	(*s.UTxOSet)[wallet.PublicKeyAddressType(coinbaseTx.TxOuts[0].Address)] = receiverUTxOs
 
 	return true
 }
@@ -87,7 +87,7 @@ func (s *BlockchainService) AddBlockToBlockchain(block coin.Block) bool {
 }
 
 func (s *BlockchainService) CreateTransaction(address []byte, amount int) wallet.Transaction {
-	unspentTransaction := wallet.UTxOut{
+	unspentTransaction := wallet.UTxO{
 		Address: []byte("1235asasdasda"),
 		Amount:  1000,
 	}

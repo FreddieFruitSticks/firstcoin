@@ -18,9 +18,19 @@ type Transaction struct {
 	Timestamp int     `json:"timestamp"`
 }
 
+type PublicKeyAddressType string
+type TxIDType string
+type UTxOSetType map[PublicKeyAddressType]map[TxIDType]UTxO
+
+// to reference the UTxO we need the address and txID because the UTxO set is a map of maps
+type UTxOID struct {
+	Address []byte
+	TxID    []byte
+}
+
 // transcation input refers to the giver of coins. Signature is signed with giver's private key
 type TxIn struct {
-	UTxOID    []byte
+	UTxOID    UTxOID
 	UTxOIndex int // index is the block number or block height - this is to prevent duplicate signatures for exact same txs
 	Signature []byte
 }
@@ -32,11 +42,21 @@ type TxOut struct {
 }
 
 // unspend transaction outputs are the final transaction outs allocated to each key - it's ID is the ID of the transaction that created it
-type UTxOut struct {
+type UTxO struct {
 	ID      []byte //ID is unique because of timestamp
 	Index   int
 	Address []byte
 	Amount  int
+}
+
+type Wallet struct {
+	UTxOSet map[PublicKeyAddressType]map[TxIDType]UTxO
+}
+
+func NewWallet(u map[PublicKeyAddressType]map[TxIDType]UTxO) *Wallet {
+	return &Wallet{
+		UTxOSet: u,
+	}
 }
 
 func CreateNewTransactionPool(account Account) []Transaction {
@@ -45,12 +65,15 @@ func CreateNewTransactionPool(account Account) []Transaction {
 	return transactionPool
 }
 
-func CreateTransaction(address []byte, amount int, uTxO *UTxOut, a *Account) Transaction {
+func CreateTransaction(address []byte, amount int, uTxO *UTxO, a *Account) Transaction {
 	txIns := make([]TxIn, 0)
 	txOuts := make([]TxOut, 0)
 
 	txIn := TxIn{
-		UTxOID:    uTxO.ID,
+		UTxOID: UTxOID{
+			Address: []byte{},
+			TxID:    []byte{},
+		},
 		UTxOIndex: uTxO.Index,
 	}
 	txIns = append(txIns, txIn)
@@ -89,7 +112,10 @@ func CreateCoinbaseTransaction(a Account, blockIndex int) (Transaction, int) {
 	txIns := make([]TxIn, 0)
 	txOuts := make([]TxOut, 0)
 	txIn := TxIn{
-		UTxOID:    []byte{},
+		UTxOID: UTxOID{
+			Address: []byte{},
+			TxID:    []byte{},
+		},
 		UTxOIndex: blockIndex,
 	}
 
@@ -128,7 +154,7 @@ func GenerateTransactionID(transaction Transaction) []byte {
 	concatTxOut := ""
 
 	for _, txIn := range transaction.TxIns {
-		concatTxIn += string(txIn.UTxOID) + strconv.Itoa(txIn.UTxOIndex)
+		concatTxIn += string(txIn.UTxOID.Address) + strconv.Itoa(txIn.UTxOIndex)
 	}
 
 	for _, txOut := range transaction.TxOuts {
@@ -169,10 +195,27 @@ func AreValidTransactions(transactions []Transaction, blockIndex int) bool {
 	return true
 }
 
-func IsValidTransaction(transaction Transaction, blockIndex int) bool {
+func (w *Wallet) IsValidTransaction(transaction Transaction) bool {
+	if len(transaction.TxIns) < 1 {
+		fmt.Println("Invalid transaction: txIns length must be > 0")
+		return false
+	}
+
+	if len(transaction.TxOuts) < 1 {
+		fmt.Println("Invalid transaction: txOuts length must be > 0")
+		return false
+	}
 
 	tID := GenerateTransactionID(transaction)
 	if !reflect.DeepEqual(tID, transaction.ID) {
+		fmt.Println("Invalid transaction id")
+
+		return false
+	}
+
+	if err := w.VerifyTransactionAmount(transaction); err != nil {
+		fmt.Println(err.Error())
+
 		return false
 	}
 
@@ -206,4 +249,49 @@ func IsValidCoinbaseTransaction(transaction Transaction, blockIndex int) bool {
 	}
 
 	return true
+}
+
+func (w *Wallet) VerifyTransactionAmount(tx Transaction) error {
+	if len(tx.TxIns) < 1 {
+		return fmt.Errorf("Invalid transaction: txIns length must be > 0")
+	}
+
+	uTxOId := tx.TxIns[0].UTxOID
+
+	spenderLedger := w.UTxOSet[PublicKeyAddressType(uTxOId.Address)]
+	if len(spenderLedger) == 0 {
+		return fmt.Errorf("spender does not exist in public ledger")
+	}
+
+	spenderUTxO := spenderLedger[TxIDType(uTxOId.TxID)]
+
+	if err := IsValidUTxO(spenderUTxO); err != nil {
+		return err
+	}
+
+	if tx.TxOuts[0].Amount > spenderUTxO.Amount {
+		return fmt.Errorf("unspent transaction output does not have enough coin")
+	}
+
+	return nil
+}
+
+func IsValidUTxO(uTxO UTxO) error {
+	if uTxO.Amount <= 0 {
+		return fmt.Errorf("spender must spend more than 0 coins")
+	}
+
+	if len(uTxO.Address) == 0 {
+		return fmt.Errorf("uTxO address cannot be empty")
+	}
+
+	if len(uTxO.ID) == 0 {
+		return fmt.Errorf("uTxO ID invalid")
+	}
+
+	if uTxO.Index < 0 {
+		return fmt.Errorf("uTxO Index invalid - must be a valid block index")
+	}
+
+	return nil
 }
