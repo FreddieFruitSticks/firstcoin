@@ -6,15 +6,15 @@ import (
 )
 
 type BlockchainService struct {
-	Account                    *wallet.Account
+	Crypt                      *wallet.Cryptographic
 	Blockchain                 *coin.Blockchain
 	UnconfirmedTransactionPool *[]wallet.Transaction
 	UTxOSet                    *wallet.UTxOSetType
 }
 
-func NewBlockchainService(a *wallet.Account, b *coin.Blockchain, u *[]wallet.Transaction, uTxO *wallet.UTxOSetType) BlockchainService {
+func NewBlockchainService(c *wallet.Cryptographic, b *coin.Blockchain, u *[]wallet.Transaction, uTxO *wallet.UTxOSetType) BlockchainService {
 	return BlockchainService{
-		Account:                    a,
+		Crypt:                      c,
 		Blockchain:                 b,
 		UnconfirmedTransactionPool: u,
 		UTxOSet:                    uTxO,
@@ -23,7 +23,7 @@ func NewBlockchainService(a *wallet.Account, b *coin.Blockchain, u *[]wallet.Tra
 
 func (s *BlockchainService) CreateNextBlock() (bool, *coin.Block, *coin.Blockchain, *wallet.UTxOSetType) {
 	// coinbase transaction is the first transaction included by the miner
-	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(*s.Account, s.Blockchain.GetLastBlock().Index+1)
+	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(*s.Crypt, s.Blockchain.GetLastBlock().Index+1)
 	transactionPool := make([]wallet.Transaction, 0)
 	transactionPool = append(transactionPool, coinbaseTransaction)
 	transactionPool = append(transactionPool, *s.UnconfirmedTransactionPool...)
@@ -57,10 +57,12 @@ func (s *BlockchainService) UpdateUTxOWithCoinbaseTransaction(block coin.Block) 
 
 	receiverUTxOs := (*s.UTxOSet)[wallet.PublicKeyAddressType(coinbaseTx.TxOuts[0].Address)]
 	uTxO := wallet.UTxO{
-		ID:      coinbaseTx.ID,
-		Index:   block.Index,
-		Address: coinbaseTx.TxOuts[0].Address,
-		Amount:  coinbaseTx.TxOuts[0].Amount,
+		ID: wallet.UTxOID{
+			TxID:    coinbaseTx.ID,
+			Address: coinbaseTx.TxOuts[0].Address,
+		},
+		Index:  block.Index,
+		Amount: coinbaseTx.TxOuts[0].Amount,
 	}
 
 	if receiverUTxOs == nil {
@@ -87,12 +89,9 @@ func (s *BlockchainService) AddBlockToBlockchain(block coin.Block) bool {
 }
 
 func (s *BlockchainService) CreateTransaction(address []byte, amount int) wallet.Transaction {
-	unspentTransaction := wallet.UTxO{
-		Address: []byte("1235asasdasda"),
-		Amount:  1000,
-	}
+	unspentTransaction := wallet.UTxO{}
 
-	transaction := wallet.CreateTransaction(address, amount, &unspentTransaction, s.Account)
+	transaction, _ := wallet.CreateTransaction(address, amount, &unspentTransaction, s.Crypt)
 	*s.UnconfirmedTransactionPool = append(*s.UnconfirmedTransactionPool, transaction)
 
 	return transaction

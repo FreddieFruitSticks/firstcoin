@@ -35,12 +35,12 @@ func main() {
 
 	thisPeer := fmt.Sprintf("localhost:%s", port)
 	peers := peer.NewPeers()
-	account := wallet.NewAccount()
-	account.GenerateKeyPair()
+	crypt := wallet.NewCryptographic()
+	crypt.GenerateKeyPair()
 	transactionPool := make([]wallet.Transaction, 0)
 
 	if isSeedHost(port) {
-		*blockchain = createGenesisBlockchain(uTxOSet, *account, *blockchain)
+		*blockchain = createGenesisBlockchain(uTxOSet, *crypt, *blockchain)
 		client = peer.NewClient(peers, blockchain, thisPeer)
 	} else {
 		client = peer.NewClient(peers, blockchain, thisPeer)
@@ -58,7 +58,7 @@ func main() {
 
 	peers.AddHostname(thisPeer)
 
-	service := service.NewBlockchainService(account, blockchain, &transactionPool, &uTxOSet)
+	service := service.NewBlockchainService(crypt, blockchain, &transactionPool, &uTxOSet)
 	coinServerHandler := peer.NewCoinServerHandler(service, client, peers)
 
 	server := peer.NewServer(*coinServerHandler)
@@ -66,22 +66,24 @@ func main() {
 	server.HandleServer(args[0])
 }
 
-func createGenesisBlockchain(unspentTxOuts map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, account wallet.Account, blockchain coin.Blockchain) coin.Blockchain {
+func createGenesisBlockchain(unspentTxOuts map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, crypt wallet.Cryptographic, blockchain coin.Blockchain) coin.Blockchain {
 	genesisTransactionPool := make([]wallet.Transaction, 0)
 
 	// coinbase transaction is the first transaction included by the miner
-	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(account, 0)
+	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(crypt, 0)
 	genesisTransactionPool = append(genesisTransactionPool, coinbaseTransaction)
 
 	uTxO := wallet.UTxO{
-		ID:      coinbaseTransaction.ID,
-		Index:   0,
-		Address: coinbaseTransaction.TxOuts[0].Address,
-		Amount:  coinbaseTransaction.TxOuts[0].Amount,
+		ID: wallet.UTxOID{
+			Address: coinbaseTransaction.TxOuts[0].Address,
+			TxID:    coinbaseTransaction.ID,
+		},
+		Index:  0,
+		Amount: coinbaseTransaction.TxOuts[0].Amount,
 	}
 	txIDMap := make(map[wallet.TxIDType]wallet.UTxO)
 	txIDMap[wallet.TxIDType(coinbaseTransaction.ID)] = uTxO
-	unspentTxOuts[wallet.PublicKeyAddressType(account.PublicKey)] = txIDMap
+	unspentTxOuts[wallet.PublicKeyAddressType(crypt.PublicKey)] = txIDMap
 
 	blockchain.AddBlock(coin.GenesisBlock(seedDifficultyLevel, genesisTransactionPool))
 

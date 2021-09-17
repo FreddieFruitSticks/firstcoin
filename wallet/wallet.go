@@ -41,48 +41,41 @@ type TxOut struct {
 	Amount  int
 }
 
-// unspend transaction outputs are the final transaction outs allocated to each key - it's ID is the ID of the transaction that created it
+// unspend transaction outputs are the final transaction outs allocated to each receiver - it's ID is the ID of the transaction that created it
 type UTxO struct {
-	ID      []byte //ID is unique because of timestamp
-	Index   int
-	Address []byte
-	Amount  int
+	ID     UTxOID //ID is unique because of timestamp
+	Index  int
+	Amount int
 }
 
 type Wallet struct {
 	UTxOSet UTxOSetType
-	Account Account
+	Crypt   Cryptographic
 }
 
-func NewWallet(u UTxOSetType, a Account) *Wallet {
+func NewWallet(u UTxOSetType, c Cryptographic) *Wallet {
 	return &Wallet{
 		UTxOSet: u,
-		Account: a,
+		Crypt:   c,
 	}
 }
 
-func CreateNewTransactionPool(account Account) []Transaction {
-	transactionPool := make([]Transaction, 0)
-
-	return transactionPool
-}
-
-func CreateTransaction(address []byte, amount int, uTxO *UTxO, a *Account) Transaction {
+func CreateTransaction(receiverAddress []byte, amount int, uTxO *UTxO, crypt *Cryptographic) (Transaction, int) {
 	txIns := make([]TxIn, 0)
 	txOuts := make([]TxOut, 0)
 
 	txIn := TxIn{
 		UTxOID: UTxOID{
-			Address: []byte{},
-			TxID:    []byte{},
+			Address: uTxO.ID.Address,
+			TxID:    uTxO.ID.TxID,
 		},
 		UTxOIndex: uTxO.Index,
 	}
 	txIns = append(txIns, txIn)
 
 	txOut := TxOut{
-		Amount:  COINBASE_TRANSACTION_AMOUNT,
-		Address: address,
+		Amount:  amount,
+		Address: receiverAddress,
 	}
 	txOuts = append(txOuts, txOut)
 
@@ -98,7 +91,7 @@ func CreateTransaction(address []byte, amount int, uTxO *UTxO, a *Account) Trans
 	transaction.ID = txID
 
 	// tx input signature is the tx id signed by the spender of coins
-	signature := a.GenerateSignature(txID)
+	signature := crypt.GenerateSignature(txID)
 	txIn.Signature = signature
 
 	return Transaction{
@@ -106,10 +99,10 @@ func CreateTransaction(address []byte, amount int, uTxO *UTxO, a *Account) Trans
 		TxIns:     txIns,
 		TxOuts:    txOuts,
 		Timestamp: now,
-	}
+	}, now
 }
 
-func CreateCoinbaseTransaction(a Account, blockIndex int) (Transaction, int) {
+func CreateCoinbaseTransaction(crypt Cryptographic, blockIndex int) (Transaction, int) {
 	// First create the transaction with TxIns and TxOuts - tx id and txIn signature are not included yet
 	txIns := make([]TxIn, 0)
 	txOuts := make([]TxOut, 0)
@@ -125,7 +118,7 @@ func CreateCoinbaseTransaction(a Account, blockIndex int) (Transaction, int) {
 
 	txOut := TxOut{
 		Amount:  COINBASE_TRANSACTION_AMOUNT,
-		Address: a.PublicKey,
+		Address: crypt.PublicKey,
 	}
 	txOuts = append(txOuts, txOut)
 
@@ -143,7 +136,7 @@ func CreateCoinbaseTransaction(a Account, blockIndex int) (Transaction, int) {
 
 	// tx input signature is the tx id signed by the spender of coins - this will be used later to verify that the uTxO public key
 	// is the true owner and authoriser of this signed transaction
-	txInSignature := a.GenerateSignature(txID)
+	txInSignature := crypt.GenerateSignature(txID)
 	txIns[0].Signature = txInSignature
 
 	return transaction, now
@@ -219,12 +212,12 @@ func (w *Wallet) IsValidTransaction(transaction Transaction) error {
 		return fmt.Errorf("Invalid transaction id")
 	}
 
+	if err := w.Crypt.VerifySignature(transaction.TxIns[0].Signature, transaction.TxIns[0].UTxOID.Address, transaction.ID); err != nil {
+		return fmt.Errorf("Invalid transaction - signature verification failed: %+v", err.Error())
+
+	}
 	if err := w.VerifyTransactionAmount(transaction); err != nil {
 		return fmt.Errorf("Invalid transaction - amount verification failed: %+v", err.Error())
-	}
-
-	if err := w.Account.VerifySignature(transaction.TxIns[0].Signature, transaction.TxIns[0].UTxOID.Address, transaction.ID); err != nil {
-		return fmt.Errorf("Invalid transaction - signature verification failed: %+v", err.Error())
 	}
 
 	return nil
@@ -289,11 +282,11 @@ func IsValidUTxOStructure(uTxO UTxO) error {
 		return fmt.Errorf("spender must spend more than 0 coins")
 	}
 
-	if len(uTxO.Address) == 0 {
+	if len(uTxO.ID.Address) == 0 {
 		return fmt.Errorf("uTxO address cannot be empty")
 	}
 
-	if len(uTxO.ID) == 0 {
+	if len(uTxO.ID.TxID) == 0 {
 		return fmt.Errorf("uTxO ID invalid")
 	}
 
