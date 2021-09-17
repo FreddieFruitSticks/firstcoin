@@ -66,10 +66,10 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 			t.Fatalf("coinbase Tx Ins UTxOIndex not equal to expected Tx Ins UTxOIndex")
 		}
 
-		isValidExpectedTxSig, _ := account.VerifySignature(expectedTx.TxIns[0].Signature, account.PublicKey, wallet.GenerateTransactionID(expectedTx))
-		isValidCoinbaseTxSig, _ := account.VerifySignature(coinbaseTx.TxIns[0].Signature, account.PublicKey, wallet.GenerateTransactionID(coinbaseTx))
+		expectedTxSigErr := account.VerifySignature(expectedTx.TxIns[0].Signature, account.PublicKey, wallet.GenerateTransactionID(expectedTx))
+		coinbaseTxSigErr := account.VerifySignature(coinbaseTx.TxIns[0].Signature, account.PublicKey, wallet.GenerateTransactionID(coinbaseTx))
 
-		if !isValidExpectedTxSig || !isValidCoinbaseTxSig {
+		if expectedTxSigErr != nil || coinbaseTxSigErr != nil {
 			t.Fatalf("coinbase Tx Signatures invalid")
 		}
 	})
@@ -124,15 +124,16 @@ func TestCreateTransaction(t *testing.T) {
 		uTxOTxIDMap := make(map[wallet.TxIDType]wallet.UTxO)
 		uTxOTxIDMap[wallet.TxIDType(txID)] = uTxO
 		uTxOSet[wallet.PublicKeyAddressType(senderAccount.PublicKey)] = uTxOTxIDMap
-		senderWallet := wallet.NewWallet(uTxOSet)
+
+		senderWallet := wallet.NewWallet(uTxOSet, *senderAccount)
 
 		expectedSenderTransaction.ID = txID
 
 		txIns[0].UTxOID.TxID = txID
 		txIns[0].Signature = senderAccount.GenerateSignature(txID)
 
-		if !senderWallet.IsValidTransaction(expectedSenderTransaction) {
-			t.Fatalf("expected transaction incorrectly constructed")
+		if err := senderWallet.IsValidTransaction(expectedSenderTransaction); err != nil {
+			t.Fatalf("Test failed: %+v", err)
 		}
 	})
 }

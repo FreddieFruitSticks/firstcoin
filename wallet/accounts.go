@@ -14,20 +14,14 @@ import (
 )
 
 type Account struct {
-	Accounts         map[string]int
 	PublicKey        []byte
 	PrivateKey       []byte
 	PrivateKeyObject *rsa.PrivateKey
 	PublicKeyObject  *rsa.PublicKey
-	MessageHashSum   []byte
 }
 
 func NewAccount() *Account {
 	return &Account{}
-}
-
-func (a *Account) AddAccount(publicKey string) {
-	a.Accounts[publicKey] = 10
 }
 
 func (a *Account) GenerateKeyPair() {
@@ -101,23 +95,26 @@ func (a *Account) GenerateSignature(message []byte) []byte {
 	return signature
 }
 
-func (a *Account) VerifySignature(signature []byte, publicKey []byte, message []byte) (bool, error) {
+func (a *Account) VerifySignature(signature []byte, publicKey []byte, message []byte) error {
 	pemBlock, _ := pem.Decode(publicKey)
+	if pemBlock == nil {
+		return fmt.Errorf("error verifying signature: could not find pemBlock for public key")
+	}
 
 	pk, err := x509.ParsePKCS1PublicKey(pemBlock.Bytes)
 	if err != nil {
-		return false, fmt.Errorf("could not parse public key %+v", err)
+		return fmt.Errorf("error verifying signature: could not parse public key %+v", err)
 	}
 
 	msgHashSum := hashMessage(message)
 
 	err = rsa.VerifyPSS(pk, crypto.SHA256, msgHashSum, signature, nil)
 	if err != nil {
-		fmt.Println("could not verify signature: ", err)
-		return false, err
+		fmt.Println()
+		return fmt.Errorf("%+v", err)
 	}
 
-	return true, nil
+	return nil
 }
 
 func hashMessage(msg []byte) []byte {

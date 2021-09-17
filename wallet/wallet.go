@@ -50,12 +50,14 @@ type UTxO struct {
 }
 
 type Wallet struct {
-	UTxOSet map[PublicKeyAddressType]map[TxIDType]UTxO
+	UTxOSet UTxOSetType
+	Account Account
 }
 
-func NewWallet(u map[PublicKeyAddressType]map[TxIDType]UTxO) *Wallet {
+func NewWallet(u UTxOSetType, a Account) *Wallet {
 	return &Wallet{
 		UTxOSet: u,
+		Account: a,
 	}
 }
 
@@ -195,31 +197,37 @@ func AreValidTransactions(transactions []Transaction, blockIndex int) bool {
 	return true
 }
 
-func (w *Wallet) IsValidTransaction(transaction Transaction) bool {
+func (w *Wallet) IsValidTransaction(transaction Transaction) error {
 	if len(transaction.TxIns) < 1 {
-		fmt.Println("Invalid transaction: txIns length must be > 0")
-		return false
+		return fmt.Errorf("Invalid transaction: txIns length must be > 0")
+	}
+
+	if err := AreValidTxIns(transaction.TxIns); err != nil {
+		return fmt.Errorf("Invalid transaction, invalid txIn %+v", err)
 	}
 
 	if len(transaction.TxOuts) < 1 {
-		fmt.Println("Invalid transaction: txOuts length must be > 0")
-		return false
+		return fmt.Errorf("Invalid transaction: txOuts length must be > 0")
+	}
+
+	if err := AreValidTxOuts(transaction.TxOuts); err != nil {
+		return fmt.Errorf("Invalid transaction, invalid txOut %+v", err)
 	}
 
 	tID := GenerateTransactionID(transaction)
 	if !reflect.DeepEqual(tID, transaction.ID) {
-		fmt.Println("Invalid transaction id")
-
-		return false
+		return fmt.Errorf("Invalid transaction id")
 	}
 
 	if err := w.VerifyTransactionAmount(transaction); err != nil {
-		fmt.Println(err.Error())
-
-		return false
+		return fmt.Errorf("Invalid transaction - amount verification failed: %+v", err.Error())
 	}
 
-	return true
+	if err := w.Account.VerifySignature(transaction.TxIns[0].Signature, transaction.TxIns[0].UTxOID.Address, transaction.ID); err != nil {
+		return fmt.Errorf("Invalid transaction - signature verification failed: %+v", err.Error())
+	}
+
+	return nil
 }
 
 func IsValidCoinbaseTransaction(transaction Transaction, blockIndex int) bool {
@@ -265,7 +273,7 @@ func (w *Wallet) VerifyTransactionAmount(tx Transaction) error {
 
 	spenderUTxO := spenderLedger[TxIDType(uTxOId.TxID)]
 
-	if err := IsValidUTxO(spenderUTxO); err != nil {
+	if err := IsValidUTxOStructure(spenderUTxO); err != nil {
 		return err
 	}
 
@@ -276,7 +284,7 @@ func (w *Wallet) VerifyTransactionAmount(tx Transaction) error {
 	return nil
 }
 
-func IsValidUTxO(uTxO UTxO) error {
+func IsValidUTxOStructure(uTxO UTxO) error {
 	if uTxO.Amount <= 0 {
 		return fmt.Errorf("spender must spend more than 0 coins")
 	}
@@ -291,6 +299,58 @@ func IsValidUTxO(uTxO UTxO) error {
 
 	if uTxO.Index < 0 {
 		return fmt.Errorf("uTxO Index invalid - must be a valid block index")
+	}
+
+	return nil
+}
+
+func IsValidTxInStructure(txIn TxIn) error {
+	if len(txIn.UTxOID.Address) == 0 {
+		return fmt.Errorf("txIn UTxO address cannot be empty")
+	}
+
+	if len(txIn.UTxOID.TxID) == 0 {
+		return fmt.Errorf("txIn UTxOID TxID cannot be empty")
+	}
+
+	if txIn.UTxOIndex == 0 {
+		return fmt.Errorf("txIn UTxOIndex cannot be 0")
+	}
+
+	if len(txIn.Signature) == 0 {
+		return fmt.Errorf("txIn Signature cannot be empty")
+	}
+
+	return nil
+}
+
+func AreValidTxIns(txIns []TxIn) error {
+	for index, txIn := range txIns {
+		if err := IsValidTxInStructure(txIn); err != nil {
+			return fmt.Errorf("error in txIn number %d. error: %+v", index, err)
+		}
+	}
+
+	return nil
+}
+
+func IsValidTxOutStructure(txOut TxOut) error {
+	if len(txOut.Address) == 0 {
+		return fmt.Errorf("invalid txOut: address must be valid public key")
+	}
+
+	if txOut.Amount <= 0 {
+		return fmt.Errorf("invalid txOut: amount must be > 0")
+	}
+
+	return nil
+}
+
+func AreValidTxOuts(txOuts []TxOut) error {
+	for index, txOut := range txOuts {
+		if err := IsValidTxOutStructure(txOut); err != nil {
+			return fmt.Errorf("invalid txOut number %d. error: %+v", index, err)
+		}
 	}
 
 	return nil
