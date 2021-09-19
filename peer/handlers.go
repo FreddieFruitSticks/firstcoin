@@ -67,7 +67,7 @@ func (c *CoinServerHandler) transaction(r *http.Request) (*HTTPResponse, *HTTPEr
 	}
 }
 
-func (c *CoinServerHandler) createTransaction(r *http.Request) (*HTTPResponse, *HTTPError) {
+func (c *CoinServerHandler) spendMoney(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
 	case "POST":
 		cc := CreateTransactionControl{}
@@ -80,9 +80,15 @@ func (c *CoinServerHandler) createTransaction(r *http.Request) (*HTTPResponse, *
 			}
 		}
 
-		transaction := c.BlockchainService.CreateTransaction([]byte(cc.Address), cc.Amount)
+		transaction, err := c.BlockchainService.SpendMoney([]byte(cc.Address), cc.Amount)
+		if err != nil {
+			return nil, &HTTPError{
+				Code:    http.StatusBadRequest,
+				Message: err.Error(),
+			}
+		}
 
-		c.Client.BroadcastTransaction(transaction)
+		c.Client.BroadcastTransaction(*transaction)
 
 		return &HTTPResponse{
 			StatusCode: http.StatusCreated,

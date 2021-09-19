@@ -24,8 +24,8 @@ func (s *Server) HandleServer(port string) {
 		fmt.Fprintf(w, "pong from, %q", html.EscapeString(r.URL.Path))
 	})
 
-	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock))             // control endpoint
-	http.HandleFunc("/create-transaction", JSONHandler(s.CoinServerHandler.createTransaction)) // control endpoint
+	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock)) // control endpoint
+	http.HandleFunc("/spend-money", JSONHandler(s.CoinServerHandler.spendMoney))   // control endpoint
 
 	http.HandleFunc("/block", JSONHandler(s.CoinServerHandler.addBlockToBlockchain))
 	http.HandleFunc("/block-chain", JSONHandler(s.CoinServerHandler.blockChain))

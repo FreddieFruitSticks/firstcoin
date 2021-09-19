@@ -3,6 +3,7 @@ package service
 import (
 	"blockchain/coin"
 	"blockchain/wallet"
+	"fmt"
 )
 
 type BlockchainService struct {
@@ -88,11 +89,48 @@ func (s *BlockchainService) AddBlockToBlockchain(block coin.Block) bool {
 	return false
 }
 
-func (s *BlockchainService) CreateTransaction(address []byte, amount int) wallet.Transaction {
+func (s *BlockchainService) SpendMoney(receiverAddress []byte, amount int) (*wallet.Transaction, error) {
 	unspentTransaction := wallet.UTxO{}
 
-	transaction, _ := wallet.CreateTransaction(address, amount, &unspentTransaction, s.Crypt)
+	// uTxOs, err := s.findUTxOs(amount)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// convertUTxOsToTxOs()
+
+	transaction, _ := wallet.CreateTransaction(receiverAddress, amount, &unspentTransaction, s.Crypt)
 	*s.UnconfirmedTransactionPool = append(*s.UnconfirmedTransactionPool, transaction)
 
-	return transaction
+	return &transaction, nil
+}
+
+// finding the senders UTxOs that can service the Tx amount
+func (s *BlockchainService) FindUTxOs(amount int) ([]wallet.UTxO, error) {
+	spenderUTxOs := (*s.UTxOSet)[wallet.PublicKeyAddressType(s.Crypt.PublicKey)]
+	uTxOs := make([]wallet.UTxO, 0)
+
+	totalAmount := 0
+
+	for _, uTxO := range spenderUTxOs {
+		if totalAmount < amount {
+			uTxOs = append(uTxOs, uTxO)
+			totalAmount += uTxO.Amount
+
+			continue
+		}
+
+		break
+	}
+
+	if totalAmount < amount {
+		return nil, fmt.Errorf("insufficient funds")
+	}
+
+	// deduct the difference between the total amount and the amount required, and add that as a TxO to go back to the spender (as change)
+	// if totalAmount > amount{
+	// 	change := totalAmount - amount
+	// }
+
+	return uTxOs, nil
 }
