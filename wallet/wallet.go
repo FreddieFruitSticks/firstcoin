@@ -12,10 +12,10 @@ import (
 const COINBASE_TRANSACTION_AMOUNT = 10
 
 type Transaction struct {
-	ID        []byte  `json:"id"`
-	TxIns     []TxIn  `json:"transactionInputs"`
-	TxOuts    []TxOut `json:"transactionOutputs"`
-	Timestamp int     `json:"timestamp"`
+	ID        []byte `json:"id"`
+	TxIns     []TxIn `json:"transactionInputs"`
+	TxOuts    []TxO  `json:"transactionOutputs"`
+	Timestamp int    `json:"timestamp"`
 }
 
 type PublicKeyAddressType string
@@ -36,7 +36,7 @@ type TxIn struct {
 }
 
 // transaction ouput refers to the receiver of coins. Address is receiver's public key
-type TxOut struct {
+type TxO struct {
 	Address []byte
 	Amount  int
 }
@@ -49,35 +49,41 @@ type UTxO struct {
 }
 
 type Wallet struct {
-	UTxOSet UTxOSetType
+	UTxOSet *UTxOSetType //TODO: technically this should only be the set of UTxOs pertaining to this wallet
 	Crypt   Cryptographic
 }
 
-func NewWallet(u UTxOSetType, c Cryptographic) *Wallet {
+func NewWallet(u *UTxOSetType, c Cryptographic) *Wallet {
 	return &Wallet{
 		UTxOSet: u,
 		Crypt:   c,
 	}
 }
 
-func CreateTransaction(receiverAddress []byte, amount int, uTxO *UTxO, crypt *Cryptographic) (Transaction, int) {
+func (w *Wallet) CreateTransaction(receiverAddress []byte, amount int) (*Transaction, int, error) {
 	txIns := make([]TxIn, 0)
-	txOuts := make([]TxOut, 0)
+	txOuts := make([]TxO, 0)
 
-	txIn := TxIn{
-		UTxOID: UTxOID{
-			Address: uTxO.ID.Address,
-			TxID:    uTxO.ID.TxID,
-		},
-		UTxOIndex: uTxO.Index,
+	uTxOs, _, err := w.FindUTxOs(amount)
+	if err != nil {
+		return nil, 0, err
 	}
-	txIns = append(txIns, txIn)
 
-	txOut := TxOut{
-		Amount:  amount,
-		Address: receiverAddress,
+	for _, uTxO := range uTxOs {
+		txIn := TxIn{
+			UTxOID: UTxOID{
+				Address: uTxO.ID.Address,
+				TxID:    uTxO.ID.TxID,
+			},
+			UTxOIndex: uTxO.Index,
+		}
+		txIns = append(txIns, txIn)
 	}
-	txOuts = append(txOuts, txOut)
+
+	txOs, _ := w.GetTxOs(amount, receiverAddress, uTxOs)
+	for _, txO := range txOs {
+		txOuts = append(txOuts, txO)
+	}
 
 	transaction := Transaction{
 		TxIns:  txIns,
@@ -91,21 +97,25 @@ func CreateTransaction(receiverAddress []byte, amount int, uTxO *UTxO, crypt *Cr
 	transaction.ID = txID
 
 	// tx input signature is the tx id signed by the spender of coins
-	signature := crypt.GenerateSignature(txID)
-	txIn.Signature = signature
+	signature := w.Crypt.GenerateSignature(txID)
 
-	return Transaction{
+	// sign all txIns from same sender.
+	for _, txIn := range transaction.TxIns {
+		txIn.Signature = signature
+	}
+
+	return &Transaction{
 		ID:        txID,
 		TxIns:     txIns,
 		TxOuts:    txOuts,
 		Timestamp: now,
-	}, now
+	}, now, nil
 }
 
 func CreateCoinbaseTransaction(crypt Cryptographic, blockIndex int) (Transaction, int) {
 	// First create the transaction with TxIns and TxOuts - tx id and txIn signature are not included yet
 	txIns := make([]TxIn, 0)
-	txOuts := make([]TxOut, 0)
+	txOuts := make([]TxO, 0)
 	txIn := TxIn{
 		UTxOID: UTxOID{
 			Address: []byte{},
@@ -116,7 +126,7 @@ func CreateCoinbaseTransaction(crypt Cryptographic, blockIndex int) (Transaction
 
 	txIns = append(txIns, txIn)
 
-	txOut := TxOut{
+	txOut := TxO{
 		Amount:  COINBASE_TRANSACTION_AMOUNT,
 		Address: crypt.PublicKey,
 	}
@@ -171,7 +181,7 @@ type prettyTxO struct {
 	Amount  int
 }
 
-func AreValidTransactions(transactions []Transaction, blockIndex int) bool {
+func AreValidTransactions(transactions []Transaction, blockIndex int, u *UTxOSetType) bool {
 	if len(transactions) == 0 {
 		return false
 	}
@@ -183,14 +193,16 @@ func AreValidTransactions(transactions []Transaction, blockIndex int) bool {
 		return false
 	}
 
-	// for _, transaction := range block.Transactions[1:] {
-
-	// }
+	for _, transaction := range transactions[1:] {
+		if err := IsValidTransaction(transaction, u); err != nil {
+			return false
+		}
+	}
 
 	return true
 }
 
-func (w *Wallet) IsValidTransaction(transaction Transaction) error {
+func IsValidTransaction(transaction Transaction, u *UTxOSetType) error {
 	if len(transaction.TxIns) < 1 {
 		return fmt.Errorf("Invalid transaction: txIns length must be > 0")
 	}
@@ -212,11 +224,13 @@ func (w *Wallet) IsValidTransaction(transaction Transaction) error {
 		return fmt.Errorf("Invalid transaction id")
 	}
 
-	if err := w.Crypt.VerifySignature(transaction.TxIns[0].Signature, transaction.TxIns[0].UTxOID.Address, transaction.ID); err != nil {
-		return fmt.Errorf("Invalid transaction - signature verification failed: %+v", err.Error())
+	for _, txIn := range transaction.TxIns {
+		if err := VerifySignature(txIn.Signature, txIn.UTxOID.Address, transaction.ID); err != nil {
+			return fmt.Errorf("Invalid transaction - signature verification failed: %+v", err.Error())
 
+		}
 	}
-	if err := w.VerifyTransactionAmount(transaction); err != nil {
+	if err := VerifyTransactionAmount(transaction, u); err != nil {
 		return fmt.Errorf("Invalid transaction - amount verification failed: %+v", err.Error())
 	}
 
@@ -252,25 +266,26 @@ func IsValidCoinbaseTransaction(transaction Transaction, blockIndex int) bool {
 	return true
 }
 
-func (w *Wallet) VerifyTransactionAmount(tx Transaction) error {
-	if len(tx.TxIns) < 1 {
-		return fmt.Errorf("Invalid transaction: txIns length must be > 0")
+func VerifyTransactionAmount(tx Transaction, u *UTxOSetType) error {
+	totalAmountFromUTxOs := 0
+
+	for _, txIn := range tx.TxIns {
+		uTxOId := txIn.UTxOID
+
+		spenderLedger := (*u)[PublicKeyAddressType(uTxOId.Address)]
+		if len(spenderLedger) == 0 {
+			return fmt.Errorf("spender does not exist in public ledger")
+		}
+
+		spenderUTxO := spenderLedger[TxIDType(uTxOId.TxID)]
+
+		if err := IsValidUTxOStructure(spenderUTxO); err != nil {
+			return err
+		}
+		totalAmountFromUTxOs += spenderUTxO.Amount
 	}
 
-	uTxOId := tx.TxIns[0].UTxOID
-
-	spenderLedger := w.UTxOSet[PublicKeyAddressType(uTxOId.Address)]
-	if len(spenderLedger) == 0 {
-		return fmt.Errorf("spender does not exist in public ledger")
-	}
-
-	spenderUTxO := spenderLedger[TxIDType(uTxOId.TxID)]
-
-	if err := IsValidUTxOStructure(spenderUTxO); err != nil {
-		return err
-	}
-
-	if tx.TxOuts[0].Amount > spenderUTxO.Amount {
+	if tx.TxOuts[0].Amount > totalAmountFromUTxOs {
 		return fmt.Errorf("unspent transaction output does not have enough coin")
 	}
 
@@ -327,7 +342,7 @@ func AreValidTxIns(txIns []TxIn) error {
 	return nil
 }
 
-func IsValidTxOutStructure(txOut TxOut) error {
+func IsValidTxOutStructure(txOut TxO) error {
 	if len(txOut.Address) == 0 {
 		return fmt.Errorf("invalid txOut: address must be valid public key")
 	}
@@ -339,7 +354,7 @@ func IsValidTxOutStructure(txOut TxOut) error {
 	return nil
 }
 
-func AreValidTxOuts(txOuts []TxOut) error {
+func AreValidTxOuts(txOuts []TxO) error {
 	for index, txOut := range txOuts {
 		if err := IsValidTxOutStructure(txOut); err != nil {
 			return fmt.Errorf("invalid txOut number %d. error: %+v", index, err)
@@ -347,4 +362,70 @@ func AreValidTxOuts(txOuts []TxOut) error {
 	}
 
 	return nil
+}
+
+// finding the senders UTxOs that can service the Tx amount - currently the strategy is simply to take the first set of uTxOs
+func (w *Wallet) FindUTxOs(amount int) ([]UTxO, int, error) {
+	spenderUTxOs := (*w.UTxOSet)[PublicKeyAddressType(w.Crypt.PublicKey)]
+	uTxOs := make([]UTxO, 0)
+
+	totalAmount := 0
+
+	for _, uTxO := range spenderUTxOs {
+		if totalAmount < amount {
+			uTxOs = append(uTxOs, uTxO)
+			totalAmount += uTxO.Amount
+
+			continue
+		}
+
+		break
+	}
+
+	if totalAmount < amount {
+		return nil, totalAmount, fmt.Errorf("insufficient funds")
+	}
+
+	return uTxOs, totalAmount, nil
+}
+
+// can only send to one receiver, and can get change
+func (w *Wallet) GetTxOs(amount int, receiverAddress []byte, uTxOs []UTxO) ([]TxO, error) {
+	txOs := make([]TxO, 0)
+
+	valid, totalAmount := validateUTxOsCanServiceAmount(uTxOs, amount)
+	if !valid {
+		return nil, fmt.Errorf("uTxOs cannot service amount. uTxO total: %d. amount: %d", totalAmount, amount)
+	}
+
+	txO := TxO{
+		Address: receiverAddress,
+		Amount:  amount,
+	}
+
+	txOs = append(txOs, txO)
+
+	change := 0
+	// deduct the difference between the total amount and the amount required, and add that as a TxO to go back to the spender (as change)
+	if totalAmount > amount {
+		change = totalAmount - amount
+		changeTxO := TxO{
+			Address: w.Crypt.PublicKey,
+			Amount:  change,
+		}
+
+		txOs = append(txOs, changeTxO)
+	}
+
+	return txOs, nil
+}
+
+func validateUTxOsCanServiceAmount(uTxOs []UTxO, amount int) (bool, int) {
+	totalAmount := 0
+
+	for _, uTxO := range uTxOs {
+		totalAmount += uTxO.Amount
+	}
+
+	return totalAmount >= amount, totalAmount
 }

@@ -52,7 +52,7 @@ func (b *Block) IsGenesisBlock() bool {
 	return b.Index == 0 && len(b.PreviousHash) == 0 && b.Timestamp == beginning
 }
 
-func (b *Block) IsValidBlock(previousBlock Block) bool {
+func (b *Block) IsValidBlock(previousBlock Block, u *wallet.UTxOSetType) bool {
 	if previousBlock.Index+1 != b.Index {
 		fmt.Println("Invalid block - invalid index")
 
@@ -87,7 +87,7 @@ func (b *Block) IsValidBlock(previousBlock Block) bool {
 		return false
 	}
 
-	if !wallet.AreValidTransactions(b.Transactions, b.Index) {
+	if !wallet.AreValidTransactions(b.Transactions, b.Index, u) {
 		fmt.Println("Invalid block - invalid transactions")
 		return false
 	}

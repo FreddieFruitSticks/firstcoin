@@ -3,7 +3,6 @@ package service
 import (
 	"blockchain/coin"
 	"blockchain/wallet"
-	"fmt"
 )
 
 type BlockchainService struct {
@@ -11,14 +10,16 @@ type BlockchainService struct {
 	Blockchain                 *coin.Blockchain
 	UnconfirmedTransactionPool *[]wallet.Transaction
 	UTxOSet                    *wallet.UTxOSetType
+	Wallet                     *wallet.Wallet
 }
 
-func NewBlockchainService(c *wallet.Cryptographic, b *coin.Blockchain, u *[]wallet.Transaction, uTxO *wallet.UTxOSetType) BlockchainService {
+func NewBlockchainService(c *wallet.Cryptographic, b *coin.Blockchain, u *[]wallet.Transaction, uTxO *wallet.UTxOSetType, w *wallet.Wallet) BlockchainService {
 	return BlockchainService{
 		Crypt:                      c,
 		Blockchain:                 b,
 		UnconfirmedTransactionPool: u,
 		UTxOSet:                    uTxO,
+		Wallet:                     w,
 	}
 }
 
@@ -31,26 +32,16 @@ func (s *BlockchainService) CreateNextBlock() (bool, *coin.Block, *coin.Blockcha
 
 	block := s.Blockchain.GenerateNextBlock(&transactionPool)
 
-	valid := block.IsValidBlock(s.Blockchain.GetLastBlock())
+	valid := block.IsValidBlock(s.Blockchain.GetLastBlock(), s.Wallet.UTxOSet)
 	if !valid {
 		return false, nil, nil, nil
 	}
 
 	s.Blockchain.AddBlock(block)
 
-	s.UpdateUnspentTxOutputs(block)
+	s.UpdateUTxOSet(block)
 
 	return true, &block, s.Blockchain, s.UTxOSet
-}
-
-func (s *BlockchainService) UpdateUnspentTxOutputs(block coin.Block) {
-	// At this point assume each transaction is valid - checked previously
-
-	s.UpdateUTxOWithCoinbaseTransaction(block)
-
-	for _, _ = range (block.Transactions)[1:] {
-	}
-	// in here loop through transactions and update unspentTxOuts
 }
 
 func (s *BlockchainService) UpdateUTxOWithCoinbaseTransaction(block coin.Block) bool {
@@ -79,10 +70,10 @@ func (s *BlockchainService) UpdateUTxOWithCoinbaseTransaction(block coin.Block) 
 	return true
 }
 
-func (s *BlockchainService) AddBlockToBlockchain(block coin.Block) bool {
-	if block.IsValidBlock(s.Blockchain.GetLastBlock()) && block.ValidTimestampToNow() {
+func (s *BlockchainService) ValidateAndAddBlockToBlockchain(block coin.Block) bool {
+	if block.IsValidBlock(s.Blockchain.GetLastBlock(), s.Wallet.UTxOSet) && block.ValidTimestampToNow() {
 		s.Blockchain.AddBlock(block)
-		s.UpdateUnspentTxOutputs(block)
+		s.UpdateUTxOSet(block)
 		// TODO: when this node receives a valid block, it must remove transactions from its own pool that exist in the blocks transactions data
 		return true
 	}
@@ -90,47 +81,22 @@ func (s *BlockchainService) AddBlockToBlockchain(block coin.Block) bool {
 }
 
 func (s *BlockchainService) SpendMoney(receiverAddress []byte, amount int) (*wallet.Transaction, error) {
-	unspentTransaction := wallet.UTxO{}
+	transaction, _, err := s.Wallet.CreateTransaction(receiverAddress, amount)
+	if err != nil {
+		return nil, err
+	}
 
-	// uTxOs, err := s.findUTxOs(amount)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	*s.UnconfirmedTransactionPool = append(*s.UnconfirmedTransactionPool, *transaction)
 
-	// convertUTxOsToTxOs()
-
-	transaction, _ := wallet.CreateTransaction(receiverAddress, amount, &unspentTransaction, s.Crypt)
-	*s.UnconfirmedTransactionPool = append(*s.UnconfirmedTransactionPool, transaction)
-
-	return &transaction, nil
+	return transaction, nil
 }
 
-// finding the senders UTxOs that can service the Tx amount
-func (s *BlockchainService) FindUTxOs(amount int) ([]wallet.UTxO, error) {
-	spenderUTxOs := (*s.UTxOSet)[wallet.PublicKeyAddressType(s.Crypt.PublicKey)]
-	uTxOs := make([]wallet.UTxO, 0)
+func (s *BlockchainService) UpdateUTxOSet(block coin.Block) {
+	// At this point assume each transaction is valid - checked previously
 
-	totalAmount := 0
+	s.UpdateUTxOWithCoinbaseTransaction(block)
 
-	for _, uTxO := range spenderUTxOs {
-		if totalAmount < amount {
-			uTxOs = append(uTxOs, uTxO)
-			totalAmount += uTxO.Amount
-
-			continue
-		}
-
-		break
+	for _, _ = range (block.Transactions)[1:] {
 	}
-
-	if totalAmount < amount {
-		return nil, fmt.Errorf("insufficient funds")
-	}
-
-	// deduct the difference between the total amount and the amount required, and add that as a TxO to go back to the spender (as change)
-	// if totalAmount > amount{
-	// 	change := totalAmount - amount
-	// }
-
-	return uTxOs, nil
+	// in here loop through transactions and update unspentTxOuts
 }

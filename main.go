@@ -27,7 +27,7 @@ func main() {
 	port := args[0]
 
 	var client *peer.Client
-
+	// var uTxOSet *wallet.UTxOSetType
 	uTxOSet := wallet.UTxOSetType(make(map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, 0))
 
 	blocks := make([]coin.Block, 0)
@@ -37,13 +37,16 @@ func main() {
 	peers := peer.NewPeers()
 	crypt := wallet.NewCryptographic()
 	crypt.GenerateKeyPair()
+	fmt.Println(crypt.PublicKey)
 	transactionPool := make([]wallet.Transaction, 0)
+
+	userWallet := wallet.NewWallet(&uTxOSet, *crypt)
 
 	if isSeedHost(port) {
 		*blockchain = createGenesisBlockchain(uTxOSet, *crypt, *blockchain)
-		client = peer.NewClient(peers, blockchain, thisPeer)
+		client = peer.NewClient(peers, blockchain, thisPeer, &uTxOSet)
 	} else {
-		client = peer.NewClient(peers, blockchain, thisPeer)
+		client = peer.NewClient(peers, blockchain, thisPeer, &uTxOSet)
 
 		p := client.GetPeers()
 		err := client.QueryPeers(p)
@@ -58,7 +61,7 @@ func main() {
 
 	peers.AddHostname(thisPeer)
 
-	service := service.NewBlockchainService(crypt, blockchain, &transactionPool, &uTxOSet)
+	service := service.NewBlockchainService(crypt, blockchain, &transactionPool, &uTxOSet, userWallet)
 	coinServerHandler := peer.NewCoinServerHandler(service, client, peers)
 
 	server := peer.NewServer(*coinServerHandler)

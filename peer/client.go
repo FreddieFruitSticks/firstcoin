@@ -15,13 +15,15 @@ type Client struct {
 	Peers      *Peers
 	Blockchain *coin.Blockchain
 	ThisPeer   string
+	UTxOSet    *wallet.UTxOSetType
 }
 
-func NewClient(p *Peers, b *coin.Blockchain, t string) *Client {
+func NewClient(p *Peers, b *coin.Blockchain, t string, u *wallet.UTxOSetType) *Client {
 	return &Client{
 		Peers:      p,
 		Blockchain: b,
 		ThisPeer:   t,
+		UTxOSet:    u,
 	}
 }
 
@@ -65,7 +67,7 @@ func (c *Client) getBlockchain(address string) (*coin.Blockchain, error) {
 		return nil, err
 	}
 
-	if !bc.IsValidBlockchain() {
+	if !bc.IsValidBlockchain(c.UTxOSet) {
 		c.Blockchain = nil
 		return nil, fmt.Errorf("invalid blockchain")
 	}
@@ -121,7 +123,7 @@ func (c *Client) QueryPeers(peers map[string]string) error {
 
 			forkChain := coin.NewBlockchain(bc.Blocks)
 
-			if bc.IsValidBlockchain() {
+			if bc.IsValidBlockchain(c.UTxOSet) {
 				c.Blockchain.ReplaceBlockchain(*forkChain)
 			}
 
@@ -134,7 +136,7 @@ func (c *Client) QueryPeers(peers map[string]string) error {
 				return err
 			}
 
-			if forkChain.IsValidBlockchain() {
+			if forkChain.IsValidBlockchain(c.UTxOSet) {
 				c.Blockchain.ReplaceBlockchain(*forkChain)
 			}
 		}

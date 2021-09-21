@@ -80,7 +80,7 @@ func (c *CoinServerHandler) spendMoney(r *http.Request) (*HTTPResponse, *HTTPErr
 			}
 		}
 
-		transaction, err := c.BlockchainService.SpendMoney([]byte(cc.Address), cc.Amount)
+		transaction, err := c.BlockchainService.SpendMoney(cc.Address, cc.Amount)
 		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
@@ -159,7 +159,7 @@ func (c *CoinServerHandler) addBlockToBlockchain(r *http.Request) (*HTTPResponse
 			}
 		}
 
-		hasUpdated := c.BlockchainService.AddBlockToBlockchain(block)
+		hasUpdated := c.BlockchainService.ValidateAndAddBlockToBlockchain(block)
 
 		if hasUpdated {
 			return &HTTPResponse{
@@ -243,6 +243,6 @@ type HostName struct {
 }
 
 type CreateTransactionControl struct {
-	Address string `json:"address"`
+	Address []byte `json:"address"`
 	Amount  int    `json:"amount"`
 }

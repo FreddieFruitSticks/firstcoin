@@ -95,7 +95,7 @@ func (c *Cryptographic) GenerateSignature(message []byte) []byte {
 	return signature
 }
 
-func (c *Cryptographic) VerifySignature(signature []byte, publicKey []byte, message []byte) error {
+func VerifySignature(signature []byte, publicKey []byte, message []byte) error {
 	pemBlock, _ := pem.Decode(publicKey)
 	if pemBlock == nil {
 		return fmt.Errorf("error verifying signature: could not find pemBlock for public key")
