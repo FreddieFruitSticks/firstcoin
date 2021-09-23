@@ -85,16 +85,16 @@ func (b *Blockchain) getDifficultyLevel() int {
 	return b.GetLastBlock().DifficultyLevel
 }
 
-func (b *Blockchain) IsValidBlockchain(u *wallet.UTxOSetType) bool {
-	if !b.Blocks[0].IsGenesisBlock() {
-		return false
+func (b *Blockchain) IsValidBlockchain(u *wallet.UTxOSetType) error {
+	if err := b.Blocks[0].IsGenesisBlock(); err != nil {
+		return fmt.Errorf("Invalid blockchain: %s. error: %s", "invalid genesis block", err.Error())
 	}
 
 	for i := 1; i < len(b.Blocks); i++ {
-		if !b.Blocks[i].IsValidBlock(b.Blocks[i-1], u) {
-			return false
+		if err := b.Blocks[i].IsValidBlock(b.Blocks[i-1], u); err != nil {
+			return err
 		}
 	}
 
-	return true
+	return nil
 }

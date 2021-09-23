@@ -54,6 +54,14 @@ func (c *CoinServerHandler) transaction(r *http.Request) (*HTTPResponse, *HTTPEr
 			}
 		}
 
+		err = wallet.IsValidTransaction(t, c.BlockchainService.UTxOSet)
+		if err != nil {
+			return nil, &HTTPError{
+				Code:    http.StatusBadRequest,
+				Message: err.Error(),
+			}
+		}
+
 		*c.BlockchainService.UnconfirmedTransactionPool = append(*c.BlockchainService.UnconfirmedTransactionPool, t)
 
 		return &HTTPResponse{
@@ -88,7 +96,29 @@ func (c *CoinServerHandler) spendMoney(r *http.Request) (*HTTPResponse, *HTTPErr
 			}
 		}
 
-		c.Client.BroadcastTransaction(*transaction)
+		tID := wallet.GenerateTransactionID(*transaction)
+		if !reflect.DeepEqual(tID, transaction.ID) {
+			return nil, &HTTPError{
+				Code:    http.StatusBadRequest,
+				Message: "unequal tsek",
+			}
+		}
+
+		err = wallet.IsValidTransaction(*transaction, c.BlockchainService.UTxOSet)
+		if err != nil {
+			return nil, &HTTPError{
+				Code:    http.StatusBadRequest,
+				Message: err.Error(),
+			}
+		}
+
+		err = c.Client.BroadcastTransaction(*transaction)
+		if err != nil {
+			return nil, &HTTPError{
+				Code:    http.StatusBadRequest,
+				Message: err.Error(),
+			}
+		}
 
 		return &HTTPResponse{
 			StatusCode: http.StatusCreated,
@@ -159,19 +189,19 @@ func (c *CoinServerHandler) addBlockToBlockchain(r *http.Request) (*HTTPResponse
 			}
 		}
 
-		hasUpdated := c.BlockchainService.ValidateAndAddBlockToBlockchain(block)
+		err = c.BlockchainService.ValidateAndAddBlockToBlockchain(block)
 
-		if hasUpdated {
-			return &HTTPResponse{
-				StatusCode: http.StatusCreated,
-				Body:       c.BlockchainService.Blockchain,
-			}, nil
-		} else {
+		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusInternalServerError,
-				Message: "Could not update blockchain",
+				Message: fmt.Sprintf("Could not update blockchain. error: %s", err.Error()),
 			}
 		}
+
+		return &HTTPResponse{
+			StatusCode: http.StatusCreated,
+			Body:       c.BlockchainService.Blockchain,
+		}, nil
 	}
 
 	return nil, &HTTPError{
@@ -191,8 +221,8 @@ func (c *CoinServerHandler) createBlock(r *http.Request) (*HTTPResponse, *HTTPEr
 			}
 		}
 
-		valid, block, blockchain, uTxOSet := c.BlockchainService.CreateNextBlock()
-		if !valid {
+		block, blockchain, uTxOSet, err := c.BlockchainService.CreateNextBlock()
+		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
 				Message: err.Error(),

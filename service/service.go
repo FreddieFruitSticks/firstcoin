@@ -23,25 +23,24 @@ func NewBlockchainService(c *wallet.Cryptographic, b *coin.Blockchain, u *[]wall
 	}
 }
 
-func (s *BlockchainService) CreateNextBlock() (bool, *coin.Block, *coin.Blockchain, *wallet.UTxOSetType) {
+func (s *BlockchainService) CreateNextBlock() (*coin.Block, *coin.Blockchain, *wallet.UTxOSetType, error) {
 	// coinbase transaction is the first transaction included by the miner
 	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(*s.Crypt, s.Blockchain.GetLastBlock().Index+1)
 	transactionPool := make([]wallet.Transaction, 0)
 	transactionPool = append(transactionPool, coinbaseTransaction)
 	transactionPool = append(transactionPool, *s.UnconfirmedTransactionPool...)
-
 	block := s.Blockchain.GenerateNextBlock(&transactionPool)
 
-	valid := block.IsValidBlock(s.Blockchain.GetLastBlock(), s.Wallet.UTxOSet)
-	if !valid {
-		return false, nil, nil, nil
+	err := block.IsValidBlock(s.Blockchain.GetLastBlock(), s.Wallet.UTxOSet)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	s.Blockchain.AddBlock(block)
 
 	s.UpdateUTxOSet(block)
 
-	return true, &block, s.Blockchain, s.UTxOSet
+	return &block, s.Blockchain, s.UTxOSet, err
 }
 
 func (s *BlockchainService) UpdateUTxOWithCoinbaseTransaction(block coin.Block) bool {
@@ -70,14 +69,15 @@ func (s *BlockchainService) UpdateUTxOWithCoinbaseTransaction(block coin.Block) 
 	return true
 }
 
-func (s *BlockchainService) ValidateAndAddBlockToBlockchain(block coin.Block) bool {
-	if block.IsValidBlock(s.Blockchain.GetLastBlock(), s.Wallet.UTxOSet) && block.ValidTimestampToNow() {
+func (s *BlockchainService) ValidateAndAddBlockToBlockchain(block coin.Block) error {
+	if err := block.IsValidBlock(s.Blockchain.GetLastBlock(), s.Wallet.UTxOSet); err == nil && block.ValidTimestampToNow() {
 		s.Blockchain.AddBlock(block)
 		s.UpdateUTxOSet(block)
 		// TODO: when this node receives a valid block, it must remove transactions from its own pool that exist in the blocks transactions data
-		return true
+		return nil
+	} else {
+		return err
 	}
-	return false
 }
 
 func (s *BlockchainService) SpendMoney(receiverAddress []byte, amount int) (*wallet.Transaction, error) {

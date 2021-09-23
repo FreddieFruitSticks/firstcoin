@@ -110,7 +110,6 @@ func VerifySignature(signature []byte, publicKey []byte, message []byte) error {
 
 	err = rsa.VerifyPSS(pk, crypto.SHA256, msgHashSum, signature, nil)
 	if err != nil {
-		fmt.Println()
 		return fmt.Errorf("%+v", err)
 	}
 

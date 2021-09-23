@@ -45,8 +45,8 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 		txInSignature := crypt.GenerateSignature(txID)
 		txIns[0].Signature = txInSignature
 
-		if !wallet.IsValidCoinbaseTransaction(coinbaseTx, 1) {
-			t.Fatalf("coinbase Tx not valid")
+		if err := wallet.IsValidCoinbaseTransaction(coinbaseTx, 1); err != nil {
+			t.Fatalf("coinbase Tx not valid %s", err.Error())
 		}
 
 		if !reflect.DeepEqual(expectedTx.Timestamp, coinbaseTx.Timestamp) {

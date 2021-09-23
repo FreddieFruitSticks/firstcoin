@@ -91,6 +91,7 @@ func (w *Wallet) CreateTransaction(receiverAddress []byte, amount int) (*Transac
 	}
 
 	now := int(time.Now().UnixNano())
+	transaction.Timestamp = now
 
 	// Generate the transaction id from the tx inputs (without signature) and tx outputs
 	txID := GenerateTransactionID(transaction)
@@ -100,16 +101,11 @@ func (w *Wallet) CreateTransaction(receiverAddress []byte, amount int) (*Transac
 	signature := w.Crypt.GenerateSignature(txID)
 
 	// sign all txIns from same sender.
-	for _, txIn := range transaction.TxIns {
-		txIn.Signature = signature
+	for i := 0; i < len(transaction.TxIns); i++ {
+		transaction.TxIns[i].Signature = signature
 	}
 
-	return &Transaction{
-		ID:        txID,
-		TxIns:     txIns,
-		TxOuts:    txOuts,
-		Timestamp: now,
-	}, now, nil
+	return &transaction, now, nil
 }
 
 func CreateCoinbaseTransaction(crypt Cryptographic, blockIndex int) (Transaction, int) {
@@ -181,25 +177,25 @@ type prettyTxO struct {
 	Amount  int
 }
 
-func AreValidTransactions(transactions []Transaction, blockIndex int, u *UTxOSetType) bool {
+func AreValidTransactions(transactions []Transaction, blockIndex int, u *UTxOSetType) error {
 	if len(transactions) == 0 {
-		return false
+		return fmt.Errorf("Invalid transactions. Cant have empty transactions")
 	}
 
 	// first transaction in the list is always the coinbase transaction
 	coinbaseTransaction := transactions[0]
 
-	if !IsValidCoinbaseTransaction(coinbaseTransaction, blockIndex) {
-		return false
+	if err := IsValidCoinbaseTransaction(coinbaseTransaction, blockIndex); err != nil {
+		return err
 	}
 
 	for _, transaction := range transactions[1:] {
 		if err := IsValidTransaction(transaction, u); err != nil {
-			return false
+			return err
 		}
 	}
 
-	return true
+	return nil
 }
 
 func IsValidTransaction(transaction Transaction, u *UTxOSetType) error {
@@ -221,7 +217,7 @@ func IsValidTransaction(transaction Transaction, u *UTxOSetType) error {
 
 	tID := GenerateTransactionID(transaction)
 	if !reflect.DeepEqual(tID, transaction.ID) {
-		return fmt.Errorf("Invalid transaction id")
+		return fmt.Errorf("Invalid transaction id: %s. generate: %s", transaction.ID, tID)
 	}
 
 	for _, txIn := range transaction.TxIns {
@@ -237,33 +233,29 @@ func IsValidTransaction(transaction Transaction, u *UTxOSetType) error {
 	return nil
 }
 
-func IsValidCoinbaseTransaction(transaction Transaction, blockIndex int) bool {
+func IsValidCoinbaseTransaction(transaction Transaction, blockIndex int) error {
 	if len(transaction.TxIns) != 1 {
-		fmt.Println("Invalid coinbase transaction txIns length > 0")
-		return false
+		return fmt.Errorf("Invalid coinbase transaction txIns length > 0")
 	}
 
 	if len(transaction.TxOuts) != 1 {
-		fmt.Println("Invalid coinbase transaction txOuts length > 0")
-		return false
+		return fmt.Errorf("Invalid coinbase transaction txOuts length > 0")
 	}
 
 	if transaction.TxOuts[0].Amount != COINBASE_TRANSACTION_AMOUNT {
-		fmt.Println("Invalid coinbase transaction amount != COINBASE_TRANSACTION_AMOUNT")
-		return false
+		return fmt.Errorf("Invalid coinbase transaction amount != COINBASE_TRANSACTION_AMOUNT")
 	}
 
 	if transaction.TxIns[0].UTxOIndex != blockIndex {
-		fmt.Println("Invalid coinbase transaction amount != COINBASE_TRANSACTION_AMOUNT")
-		return false
+		return fmt.Errorf("Invalid coinbase transaction amount != COINBASE_TRANSACTION_AMOUNT")
 	}
 
 	tID := GenerateTransactionID(transaction)
 	if !reflect.DeepEqual(tID, transaction.ID) {
-		return false
+		return fmt.Errorf("Invalid coinbase transaction. TransactionId is invalid")
 	}
 
-	return true
+	return nil
 }
 
 func VerifyTransactionAmount(tx Transaction, u *UTxOSetType) error {
@@ -319,10 +311,6 @@ func IsValidTxInStructure(txIn TxIn) error {
 
 	if len(txIn.UTxOID.TxID) == 0 {
 		return fmt.Errorf("txIn UTxOID TxID cannot be empty")
-	}
-
-	if txIn.UTxOIndex == 0 {
-		return fmt.Errorf("txIn UTxOIndex cannot be 0")
 	}
 
 	if len(txIn.Signature) == 0 {

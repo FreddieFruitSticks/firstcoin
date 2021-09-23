@@ -5,6 +5,7 @@ import (
 	"blockchain/peer"
 	"blockchain/service"
 	"blockchain/wallet"
+	"encoding/base64"
 	"fmt"
 	"os"
 )
@@ -27,7 +28,6 @@ func main() {
 	port := args[0]
 
 	var client *peer.Client
-	// var uTxOSet *wallet.UTxOSetType
 	uTxOSet := wallet.UTxOSetType(make(map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, 0))
 
 	blocks := make([]coin.Block, 0)
@@ -37,7 +37,8 @@ func main() {
 	peers := peer.NewPeers()
 	crypt := wallet.NewCryptographic()
 	crypt.GenerateKeyPair()
-	fmt.Println(crypt.PublicKey)
+
+	fmt.Println(string(base64Encode(crypt.PublicKey)))
 	transactionPool := make([]wallet.Transaction, 0)
 
 	userWallet := wallet.NewWallet(&uTxOSet, *crypt)
@@ -91,4 +92,10 @@ func createGenesisBlockchain(unspentTxOuts map[wallet.PublicKeyAddressType]map[w
 	blockchain.AddBlock(coin.GenesisBlock(seedDifficultyLevel, genesisTransactionPool))
 
 	return blockchain
+}
+
+func base64Encode(message []byte) []byte {
+	b := make([]byte, base64.StdEncoding.EncodedLen(len(message)))
+	base64.StdEncoding.Encode(b, message)
+	return b
 }

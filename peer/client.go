@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 )
@@ -67,9 +68,9 @@ func (c *Client) getBlockchain(address string) (*coin.Blockchain, error) {
 		return nil, err
 	}
 
-	if !bc.IsValidBlockchain(c.UTxOSet) {
+	if err := bc.IsValidBlockchain(c.UTxOSet); err != nil {
 		c.Blockchain = nil
-		return nil, fmt.Errorf("invalid blockchain")
+		return nil, fmt.Errorf("invalid blockchain. error: %s", err.Error())
 	}
 
 	return &bc, nil
@@ -123,8 +124,10 @@ func (c *Client) QueryPeers(peers map[string]string) error {
 
 			forkChain := coin.NewBlockchain(bc.Blocks)
 
-			if bc.IsValidBlockchain(c.UTxOSet) {
+			if err := bc.IsValidBlockchain(c.UTxOSet); err == nil {
 				c.Blockchain.ReplaceBlockchain(*forkChain)
+			} else {
+				return err
 			}
 
 			return nil
@@ -136,9 +139,10 @@ func (c *Client) QueryPeers(peers map[string]string) error {
 				return err
 			}
 
-			if forkChain.IsValidBlockchain(c.UTxOSet) {
-				c.Blockchain.ReplaceBlockchain(*forkChain)
+			if err := forkChain.IsValidBlockchain(c.UTxOSet); err != nil {
+				return err
 			}
+			c.Blockchain.ReplaceBlockchain(*forkChain)
 		}
 	}
 
@@ -173,18 +177,17 @@ func (c *Client) BroadcastTransaction(tx wallet.Transaction) error {
 			body := bytes.NewReader(transaction)
 			resp, err := http.Post(fmt.Sprintf("http://%s/transaction", peer), "application/json", body)
 			if err != nil {
-				fmt.Println(err)
-
-				// Remove host if error for now - assume its a fail peer
-				c.Peers.RemoveHostname(peer)
-			} else {
-				if resp.StatusCode >= 400 {
-					c.Peers.RemoveHostname(peer)
-				}
+				return fmt.Errorf("peer %s rejected transaction. error: %s", peer, readResponseBody(resp.Body))
 			}
 
 		}
 	}
 
 	return nil
+}
+
+func readResponseBody(body io.ReadCloser) string {
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(body)
+	return buf.String()
 }

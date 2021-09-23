@@ -47,52 +47,56 @@ func GenesisBlock(seedDifficultyLevel int, transactionPool []wallet.Transaction)
 	}
 }
 
-func (b *Block) IsGenesisBlock() bool {
+func (b *Block) IsGenesisBlock() error {
 	beginning := int(time.Date(2021, time.August, 13, 0, 0, 0, 0, time.UTC).UnixNano())
-	return b.Index == 0 && len(b.PreviousHash) == 0 && b.Timestamp == beginning
+	if b.Index != 0 {
+		return fmt.Errorf("Genesis block must have 0 index")
+	}
+
+	if len(b.PreviousHash) != 0 {
+		return fmt.Errorf("Genesis block must have 0 length previous hash")
+	}
+
+	if b.Timestamp != beginning {
+		return fmt.Errorf("Genesis block must have timestamp set to beginning")
+	}
+
+	return nil
 }
 
-func (b *Block) IsValidBlock(previousBlock Block, u *wallet.UTxOSetType) bool {
+func (b *Block) IsValidBlock(previousBlock Block, u *wallet.UTxOSetType) error {
 	if previousBlock.Index+1 != b.Index {
-		fmt.Println("Invalid block - invalid index")
-
-		return false
+		return fmt.Errorf("Invalid block: %s", "invalid index")
 	}
 
 	if !reflect.DeepEqual(b.PreviousHash, previousBlock.Hash) {
-		fmt.Println("Invalid block - invalid previous block hash")
-
-		return false
+		return fmt.Errorf("Invalid block: %s", "invalid previous block hash")
 	}
 
 	if !reflect.DeepEqual(calculateBlockHash(b.Index, b.PreviousHash, b.Timestamp, b.Transactions, b.DifficultyLevel), b.Hash) {
-		fmt.Println("Invalid block - invalid block hash")
-
-		return false
+		return fmt.Errorf("Invalid block: %s", "invalid block hash")
 	}
 
 	if !ValidateProofOfWork(b.Hash, b.Nonce, b.DifficultyLevel) {
-		fmt.Println("Invalid block - invalid pow")
-
-		return false
+		return fmt.Errorf("Invalid block: %s", "invalid pow")
 	}
 
 	if !validateNewBlockDifficulty(*b) {
-		fmt.Println("Invalid block - invalid difficulty")
-		return false
+		return fmt.Errorf("Invalid block: %s", "invalid difficulty")
+
 	}
 
 	if b.Timestamp <= previousBlock.Timestamp {
-		fmt.Println("Invalid block - invalid timestamps")
-		return false
+		return fmt.Errorf("Invalid block: %s", "invalid timestamps")
+
 	}
 
-	if !wallet.AreValidTransactions(b.Transactions, b.Index, u) {
-		fmt.Println("Invalid block - invalid transactions")
-		return false
+	if err := wallet.AreValidTransactions(b.Transactions, b.Index, u); err != nil {
+		return fmt.Errorf("Invalid block: %s. error: %s", "invalid transactions", err.Error())
+
 	}
 
-	return true
+	return nil
 }
 
 // validate that the current block's timestamp isnt more than 10s in the future
