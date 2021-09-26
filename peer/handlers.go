@@ -2,6 +2,7 @@ package peer
 
 import (
 	"blockchain/coin"
+	"blockchain/repository"
 	"blockchain/service"
 	"blockchain/wallet"
 	"encoding/json"
@@ -54,7 +55,7 @@ func (c *CoinServerHandler) transaction(r *http.Request) (*HTTPResponse, *HTTPEr
 			}
 		}
 
-		err = wallet.IsValidTransaction(t, c.BlockchainService.UTxOSet)
+		err = wallet.IsValidTransaction(t)
 		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
@@ -104,7 +105,7 @@ func (c *CoinServerHandler) spendMoney(r *http.Request) (*HTTPResponse, *HTTPErr
 			}
 		}
 
-		err = wallet.IsValidTransaction(*transaction, c.BlockchainService.UTxOSet)
+		err = wallet.IsValidTransaction(*transaction)
 		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
@@ -190,7 +191,6 @@ func (c *CoinServerHandler) addBlockToBlockchain(r *http.Request) (*HTTPResponse
 		}
 
 		err = c.BlockchainService.ValidateAndAddBlockToBlockchain(block)
-
 		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusInternalServerError,
@@ -221,7 +221,7 @@ func (c *CoinServerHandler) createBlock(r *http.Request) (*HTTPResponse, *HTTPEr
 			}
 		}
 
-		block, blockchain, uTxOSet, err := c.BlockchainService.CreateNextBlock()
+		block, blockchain, err := c.BlockchainService.CreateNextBlock()
 		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
@@ -232,11 +232,11 @@ func (c *CoinServerHandler) createBlock(r *http.Request) (*HTTPResponse, *HTTPEr
 		c.Client.BroadcastBlock(*block, c.Client.ThisPeer)
 
 		payload := struct {
-			Blocks              []coin.Block                                                    `json:"blocks"`
-			UnspentTransactions map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO `json:"unspentTransactions"`
+			Blocks              []coin.Block                                                                `json:"blocks"`
+			UnspentTransactions map[repository.PublicKeyAddressType]map[repository.TxIDType]repository.UTxO `json:"unspentTransactions"`
 		}{
 			Blocks:              blockchain.Blocks,
-			UnspentTransactions: *uTxOSet,
+			UnspentTransactions: repository.GetEntireUTxOSet(),
 		}
 
 		return &HTTPResponse{

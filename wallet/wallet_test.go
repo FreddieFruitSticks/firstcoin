@@ -1,6 +1,7 @@
 package wallet_test
 
 import (
+	"blockchain/repository"
 	"blockchain/wallet"
 	"reflect"
 	"testing"
@@ -13,10 +14,10 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 
 		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*crypt, 1)
 
-		txIns := make([]wallet.TxIn, 0)
-		txOuts := make([]wallet.TxO, 0)
-		txIn := wallet.TxIn{
-			UTxOID: wallet.UTxOID{
+		txIns := make([]repository.TxIn, 0)
+		txOuts := make([]repository.TxO, 0)
+		txIn := repository.TxIn{
+			UTxOID: repository.UTxOID{
 				Address: []byte{},
 				TxID:    []byte{},
 			},
@@ -26,7 +27,7 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 
 		txIns = append(txIns, txIn)
 
-		txOut := wallet.TxO{
+		txOut := repository.TxO{
 			Amount:  wallet.COINBASE_TRANSACTION_AMOUNT,
 			Address: crypt.PublicKey,
 		}
@@ -89,13 +90,11 @@ func TestCreateTransaction(t *testing.T) {
 		receiverCrypt := wallet.NewCryptographic()
 		receiverCrypt.GenerateKeyPair()
 
-		uTxOSet := wallet.UTxOSetType(make(map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, 0))
+		txIns := make([]repository.TxIn, 0)
+		txOuts := make([]repository.TxO, 0)
 
-		txIns := make([]wallet.TxIn, 0)
-		txOuts := make([]wallet.TxO, 0)
-
-		txIn := wallet.TxIn{
-			UTxOID: wallet.UTxOID{
+		txIn := repository.TxIn{
+			UTxOID: repository.UTxOID{
 				Address: senderCrypt.PublicKey,
 				TxID:    previousTxID,
 			},
@@ -103,8 +102,8 @@ func TestCreateTransaction(t *testing.T) {
 			Signature: []byte{},
 		}
 
-		txIn2 := wallet.TxIn{
-			UTxOID: wallet.UTxOID{
+		txIn2 := repository.TxIn{
+			UTxOID: repository.UTxOID{
 				Address: senderCrypt.PublicKey,
 				TxID:    previousTxID2,
 			},
@@ -115,11 +114,11 @@ func TestCreateTransaction(t *testing.T) {
 		txIns = append(txIns, txIn)
 		txIns = append(txIns, txIn2)
 
-		txOutReceiver := wallet.TxO{
+		txOutReceiver := repository.TxO{
 			Address: receiverCrypt.PublicKey,
 			Amount:  amount,
 		}
-		txOutSenderChange := wallet.TxO{
+		txOutSenderChange := repository.TxO{
 			Address: senderCrypt.PublicKey,
 			Amount:  20,
 		}
@@ -132,30 +131,20 @@ func TestCreateTransaction(t *testing.T) {
 			TxOuts: txOuts,
 		}
 
-		uTxO1 := wallet.UTxO{
-			ID: wallet.UTxOID{
-				TxID:    previousTxID,
-				Address: senderCrypt.PublicKey,
-			},
-			Index:  1,
-			Amount: 70,
+		txO1 := repository.TxO{
+			Address: senderCrypt.PublicKey,
+			Amount:  70,
 		}
 
-		uTxO2 := wallet.UTxO{
-			ID: wallet.UTxOID{
-				TxID:    previousTxID2,
-				Address: senderCrypt.PublicKey,
-			},
-			Index:  1,
-			Amount: 50,
+		txO2 := repository.TxO{
+			Address: senderCrypt.PublicKey,
+			Amount:  50,
 		}
 
-		uTxOTxIDMap := make(map[wallet.TxIDType]wallet.UTxO)
-		uTxOTxIDMap[wallet.TxIDType(previousTxID)] = uTxO1
-		uTxOTxIDMap[wallet.TxIDType(previousTxID2)] = uTxO2
-		uTxOSet[wallet.PublicKeyAddressType(senderCrypt.PublicKey)] = uTxOTxIDMap
+		repository.AddTxOToReceiver(previousTxID, 1, txO1)
+		repository.AddTxOToReceiver(previousTxID2, 1, txO2)
 
-		userWallet := wallet.NewWallet(&uTxOSet, *senderCrypt)
+		userWallet := wallet.NewWallet(*senderCrypt)
 
 		tx, now, _ := userWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
 
@@ -173,7 +162,7 @@ func TestCreateTransaction(t *testing.T) {
 		txIns[0].Signature = senderCrypt.GenerateSignature(expectedTxID)
 		txIns[1].Signature = senderCrypt.GenerateSignature(expectedTxID)
 
-		if err := wallet.IsValidTransaction(expectedSenderTx, &uTxOSet); err != nil {
+		if err := wallet.IsValidTransaction(expectedSenderTx); err != nil {
 			t.Fatalf("Test failed: %+v", err)
 		}
 
@@ -208,13 +197,11 @@ func TestCreateTransaction(t *testing.T) {
 		receiverCrypt := wallet.NewCryptographic()
 		receiverCrypt.GenerateKeyPair()
 
-		uTxOSet := wallet.UTxOSetType(make(map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, 0))
+		txIns := make([]repository.TxIn, 0)
+		txOuts := make([]repository.TxO, 0)
 
-		txIns := make([]wallet.TxIn, 0)
-		txOuts := make([]wallet.TxO, 0)
-
-		txIn := wallet.TxIn{
-			UTxOID: wallet.UTxOID{
+		txIn := repository.TxIn{
+			UTxOID: repository.UTxOID{
 				Address: senderCrypt.PublicKey,
 				TxID:    previousTxID,
 			},
@@ -222,8 +209,8 @@ func TestCreateTransaction(t *testing.T) {
 			Signature: []byte{},
 		}
 
-		txIn2 := wallet.TxIn{
-			UTxOID: wallet.UTxOID{
+		txIn2 := repository.TxIn{
+			UTxOID: repository.UTxOID{
 				Address: senderCrypt.PublicKey,
 				TxID:    previousTxID2,
 			},
@@ -234,41 +221,31 @@ func TestCreateTransaction(t *testing.T) {
 		txIns = append(txIns, txIn)
 		txIns = append(txIns, txIn2)
 
-		txOutReceiver := wallet.TxO{
+		txOutReceiver := repository.TxO{
 			Address: receiverCrypt.PublicKey,
 			Amount:  amount,
 		}
-		txOutSenderChange := wallet.TxO{
+		txOutSenderChange := repository.TxO{
 			Address: senderCrypt.PublicKey,
 			Amount:  20,
 		}
 		txOuts = append(txOuts, txOutReceiver)
 		txOuts = append(txOuts, txOutSenderChange)
 
-		uTxO1 := wallet.UTxO{
-			ID: wallet.UTxOID{
-				TxID:    previousTxID,
-				Address: senderCrypt.PublicKey,
-			},
-			Index:  1,
-			Amount: 70,
+		txO1 := repository.TxO{
+			Address: senderCrypt.PublicKey,
+			Amount:  70,
 		}
 
-		uTxO2 := wallet.UTxO{
-			ID: wallet.UTxOID{
-				TxID:    previousTxID2,
-				Address: senderCrypt.PublicKey,
-			},
-			Index:  1,
-			Amount: 20,
+		txO2 := repository.TxO{
+			Address: senderCrypt.PublicKey,
+			Amount:  20,
 		}
 
-		uTxOTxIDMap := make(map[wallet.TxIDType]wallet.UTxO)
-		uTxOTxIDMap[wallet.TxIDType(previousTxID)] = uTxO1
-		uTxOTxIDMap[wallet.TxIDType(previousTxID2)] = uTxO2
-		uTxOSet[wallet.PublicKeyAddressType(senderCrypt.PublicKey)] = uTxOTxIDMap
+		repository.AddTxOToReceiver(previousTxID, 1, txO1)
+		repository.AddTxOToReceiver(previousTxID2, 1, txO2)
 
-		userWallet := wallet.NewWallet(&uTxOSet, *senderCrypt)
+		userWallet := wallet.NewWallet(*senderCrypt)
 
 		_, _, err := userWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
 		if err == nil {
@@ -290,13 +267,11 @@ func TestCreateTransaction(t *testing.T) {
 		receiverCrypt := wallet.NewCryptographic()
 		receiverCrypt.GenerateKeyPair()
 
-		uTxOSet := wallet.UTxOSetType(make(map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, 0))
+		txIns := make([]repository.TxIn, 0)
+		txOuts := make([]repository.TxO, 0)
 
-		txIns := make([]wallet.TxIn, 0)
-		txOuts := make([]wallet.TxO, 0)
-
-		txIn := wallet.TxIn{
-			UTxOID: wallet.UTxOID{
+		txIn := repository.TxIn{
+			UTxOID: repository.UTxOID{
 				Address: senderCrypt.PublicKey,
 				TxID:    previousTxID,
 			},
@@ -304,8 +279,8 @@ func TestCreateTransaction(t *testing.T) {
 			Signature: []byte{},
 		}
 
-		txIn2 := wallet.TxIn{
-			UTxOID: wallet.UTxOID{
+		txIn2 := repository.TxIn{
+			UTxOID: repository.UTxOID{
 				Address: senderCrypt.PublicKey,
 				TxID:    previousTxID2,
 			},
@@ -316,11 +291,11 @@ func TestCreateTransaction(t *testing.T) {
 		txIns = append(txIns, txIn)
 		txIns = append(txIns, txIn2)
 
-		txOutReceiver := wallet.TxO{
+		txOutReceiver := repository.TxO{
 			Address: receiverCrypt.PublicKey,
 			Amount:  amount,
 		}
-		txOutSenderChange := wallet.TxO{
+		txOutSenderChange := repository.TxO{
 			Address: senderCrypt.PublicKey,
 			Amount:  20,
 		}
@@ -333,30 +308,20 @@ func TestCreateTransaction(t *testing.T) {
 			TxOuts: txOuts,
 		}
 
-		uTxO1 := wallet.UTxO{
-			ID: wallet.UTxOID{
-				TxID:    previousTxID,
-				Address: senderCrypt.PublicKey,
-			},
-			Index:  1,
-			Amount: 70,
+		txO1 := repository.TxO{
+			Address: senderCrypt.PublicKey,
+			Amount:  70,
 		}
 
-		uTxO2 := wallet.UTxO{
-			ID: wallet.UTxOID{
-				TxID:    previousTxID2,
-				Address: senderCrypt.PublicKey,
-			},
-			Index:  1,
-			Amount: 20,
+		txO2 := repository.TxO{
+			Address: senderCrypt.PublicKey,
+			Amount:  20,
 		}
 
-		uTxOTxIDMap := make(map[wallet.TxIDType]wallet.UTxO)
-		uTxOTxIDMap[wallet.TxIDType(previousTxID)] = uTxO1
-		uTxOTxIDMap[wallet.TxIDType(previousTxID2)] = uTxO2
-		uTxOSet[wallet.PublicKeyAddressType(senderCrypt.PublicKey)] = uTxOTxIDMap
+		repository.AddTxOToReceiver(previousTxID, 1, txO1)
+		repository.AddTxOToReceiver(previousTxID2, 1, txO2)
 
-		userWallet := wallet.NewWallet(&uTxOSet, *senderCrypt)
+		userWallet := wallet.NewWallet(*senderCrypt)
 
 		_, now, err := userWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
 		if err == nil {
@@ -377,7 +342,7 @@ func TestCreateTransaction(t *testing.T) {
 		txIns[0].Signature = senderCrypt.GenerateSignature(expectedTxID)
 		txIns[1].Signature = []byte{1, 2, 3}
 
-		if err := wallet.IsValidTransaction(expectedSenderTx, &uTxOSet); err == nil ||
+		if err := wallet.IsValidTransaction(expectedSenderTx); err == nil ||
 			(err != nil && err.Error() != "Invalid transaction - signature verification failed: crypto/rsa: verification error") {
 			t.Fatalf("Test failed: expected signature check to fail.\nGot: %s", err.Error())
 		}
@@ -387,14 +352,14 @@ func TestCreateTransaction(t *testing.T) {
 func TestFindUTxOs(test *testing.T) {
 	crypt := wallet.NewCryptographic()
 	crypt.GenerateKeyPair()
-
 	test.Run("UTxOs can service the amount", func(t *testing.T) {
-		uTxOSet := wallet.UTxOSetType(make(map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, 0))
-		userWallet := wallet.NewWallet(&uTxOSet, *crypt)
+		crypt := wallet.NewCryptographic()
+		crypt.GenerateKeyPair()
+		userWallet := wallet.NewWallet(*crypt)
 
 		id1 := []byte{1, 2, 3}
-		uTxO1 := wallet.UTxO{
-			ID: wallet.UTxOID{
+		uTxO1 := repository.UTxO{
+			ID: repository.UTxOID{
 				Address: crypt.PublicKey,
 				TxID:    id1,
 			},
@@ -403,8 +368,8 @@ func TestFindUTxOs(test *testing.T) {
 		}
 
 		id2 := []byte{4, 5, 6}
-		uTxO2 := wallet.UTxO{
-			ID: wallet.UTxOID{
+		uTxO2 := repository.UTxO{
+			ID: repository.UTxOID{
 				Address: crypt.PublicKey,
 				TxID:    id2,
 			},
@@ -412,17 +377,24 @@ func TestFindUTxOs(test *testing.T) {
 			Index:  1,
 		}
 
-		uTxOMap := make(map[wallet.TxIDType]wallet.UTxO)
-		uTxOMap[wallet.TxIDType(id2)] = uTxO2
-		uTxOMap[wallet.TxIDType(id1)] = uTxO1
+		txO1 := repository.TxO{
+			Address: crypt.PublicKey,
+			Amount:  70,
+		}
 
-		uTxOSet[wallet.PublicKeyAddressType(crypt.PublicKey)] = uTxOMap
+		txO2 := repository.TxO{
+			Address: crypt.PublicKey,
+			Amount:  50,
+		}
 
-		expectedUtxOs := make([]wallet.UTxO, 0)
-		expectedUtxOs = append(expectedUtxOs, uTxO2)
+		repository.AddTxOToReceiver(id1, 1, txO1)
+		repository.AddTxOToReceiver(id2, 1, txO2)
+
+		expectedUtxOs := make([]repository.UTxO, 0)
 		expectedUtxOs = append(expectedUtxOs, uTxO1)
+		expectedUtxOs = append(expectedUtxOs, uTxO2)
 
-		// expectedUtxOs := []wallet.UTxO{uTxO1, uTxO2}
+		// expectedUtxOs := []repository.UTxO{uTxO1, uTxO2}
 
 		uTxOs, _, err := userWallet.FindUTxOs(100)
 		if err != nil {
@@ -435,34 +407,24 @@ func TestFindUTxOs(test *testing.T) {
 	})
 
 	test.Run("UTxOs cannot service the amount - insufficient funds", func(t *testing.T) {
-		uTxOSet := wallet.UTxOSetType(make(map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, 0))
-		userWallet := wallet.NewWallet(&uTxOSet, *crypt)
+		userWallet := wallet.NewWallet(*crypt)
+		repository.ClearUTxOSet()
 
 		id1 := []byte{1, 2, 3}
-		uTxO1 := wallet.UTxO{
-			ID: wallet.UTxOID{
-				Address: crypt.PublicKey,
-				TxID:    id1,
-			},
-			Amount: 70,
-			Index:  1,
-		}
-
 		id2 := []byte{4, 5, 6}
-		uTxO2 := wallet.UTxO{
-			ID: wallet.UTxOID{
-				Address: crypt.PublicKey,
-				TxID:    id2,
-			},
-			Amount: 20,
-			Index:  1,
+
+		txO1 := repository.TxO{
+			Address: crypt.PublicKey,
+			Amount:  70,
 		}
 
-		uTxOMap := make(map[wallet.TxIDType]wallet.UTxO)
-		uTxOMap[wallet.TxIDType(id1)] = uTxO1
-		uTxOMap[wallet.TxIDType(id2)] = uTxO2
+		txO2 := repository.TxO{
+			Address: crypt.PublicKey,
+			Amount:  20,
+		}
 
-		uTxOSet[wallet.PublicKeyAddressType(crypt.PublicKey)] = uTxOMap
+		repository.AddTxOToReceiver(id1, 1, txO1)
+		repository.AddTxOToReceiver(id2, 1, txO2)
 
 		_, _, err := userWallet.FindUTxOs(100)
 		if err == nil {
@@ -481,12 +443,11 @@ func TestGetTxOs(test *testing.T) {
 	crypt.GenerateKeyPair()
 
 	test.Run("UTxOs can service the amount", func(t *testing.T) {
-		uTxOSet := wallet.UTxOSetType(make(map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, 0))
-		userWallet := wallet.NewWallet(&uTxOSet, *crypt)
+		userWallet := wallet.NewWallet(*crypt)
 
 		id1 := []byte{1, 2, 3}
-		uTxO1 := wallet.UTxO{
-			ID: wallet.UTxOID{
+		uTxO1 := repository.UTxO{
+			ID: repository.UTxOID{
 				Address: crypt.PublicKey,
 				TxID:    id1,
 			},
@@ -495,8 +456,8 @@ func TestGetTxOs(test *testing.T) {
 		}
 
 		id2 := []byte{4, 5, 6}
-		uTxO2 := wallet.UTxO{
-			ID: wallet.UTxOID{
+		uTxO2 := repository.UTxO{
+			ID: repository.UTxOID{
 				Address: crypt.PublicKey,
 				TxID:    id2,
 			},
@@ -504,19 +465,19 @@ func TestGetTxOs(test *testing.T) {
 			Index:  1,
 		}
 
-		uTxOs := make([]wallet.UTxO, 0)
+		uTxOs := make([]repository.UTxO, 0)
 		uTxOs = append(uTxOs, uTxO1)
 		uTxOs = append(uTxOs, uTxO2)
 
 		receiverAddress := []byte{1, 2, 3}
 
-		expectedTxOs := make([]wallet.TxO, 0)
-		expectedTxOs = append(expectedTxOs, wallet.TxO{
+		expectedTxOs := make([]repository.TxO, 0)
+		expectedTxOs = append(expectedTxOs, repository.TxO{
 			Address: receiverAddress,
 			Amount:  100,
 		})
 
-		expectedTxOs = append(expectedTxOs, wallet.TxO{
+		expectedTxOs = append(expectedTxOs, repository.TxO{
 			Address: crypt.PublicKey,
 			Amount:  20,
 		})
@@ -532,12 +493,11 @@ func TestGetTxOs(test *testing.T) {
 	})
 
 	test.Run("UTxOs cannot service the amount - insufficient funds", func(t *testing.T) {
-		uTxOSet := wallet.UTxOSetType(make(map[wallet.PublicKeyAddressType]map[wallet.TxIDType]wallet.UTxO, 0))
-		userWallet := wallet.NewWallet(&uTxOSet, *crypt)
+		userWallet := wallet.NewWallet(*crypt)
 
 		id1 := []byte{1, 2, 3}
-		uTxO1 := wallet.UTxO{
-			ID: wallet.UTxOID{
+		uTxO1 := repository.UTxO{
+			ID: repository.UTxOID{
 				Address: crypt.PublicKey,
 				TxID:    id1,
 			},
@@ -546,8 +506,8 @@ func TestGetTxOs(test *testing.T) {
 		}
 
 		id2 := []byte{4, 5, 6}
-		uTxO2 := wallet.UTxO{
-			ID: wallet.UTxOID{
+		uTxO2 := repository.UTxO{
+			ID: repository.UTxOID{
 				Address: crypt.PublicKey,
 				TxID:    id2,
 			},
@@ -555,19 +515,19 @@ func TestGetTxOs(test *testing.T) {
 			Index:  1,
 		}
 
-		uTxOs := make([]wallet.UTxO, 0)
+		uTxOs := make([]repository.UTxO, 0)
 		uTxOs = append(uTxOs, uTxO1)
 		uTxOs = append(uTxOs, uTxO2)
 
 		receiverAddress := []byte{1, 2, 3}
 
-		expectedTxOs := make([]wallet.TxO, 0)
-		expectedTxOs = append(expectedTxOs, wallet.TxO{
+		expectedTxOs := make([]repository.TxO, 0)
+		expectedTxOs = append(expectedTxOs, repository.TxO{
 			Address: receiverAddress,
 			Amount:  100,
 		})
 
-		expectedTxOs = append(expectedTxOs, wallet.TxO{
+		expectedTxOs = append(expectedTxOs, repository.TxO{
 			Address: crypt.PublicKey,
 			Amount:  20,
 		})

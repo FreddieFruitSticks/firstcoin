@@ -64,7 +64,7 @@ func (b *Block) IsGenesisBlock() error {
 	return nil
 }
 
-func (b *Block) IsValidBlock(previousBlock Block, u *wallet.UTxOSetType) error {
+func (b *Block) IsValidBlock(previousBlock Block) error {
 	if previousBlock.Index+1 != b.Index {
 		return fmt.Errorf("Invalid block: %s", "invalid index")
 	}
@@ -91,7 +91,7 @@ func (b *Block) IsValidBlock(previousBlock Block, u *wallet.UTxOSetType) error {
 
 	}
 
-	if err := wallet.AreValidTransactions(b.Transactions, b.Index, u); err != nil {
+	if err := wallet.AreValidTransactions(b.Transactions, b.Index); err != nil {
 		return fmt.Errorf("Invalid block: %s. error: %s", "invalid transactions", err.Error())
 
 	}
