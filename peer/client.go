@@ -2,8 +2,9 @@ package peer
 
 import (
 	"blockchain/coin"
+	"blockchain/repository"
+	"blockchain/service"
 	"blockchain/utils"
-	"blockchain/wallet"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -75,7 +76,7 @@ func (c *Client) getBlockchain(address string) (*coin.Blockchain, error) {
 }
 
 // Fetch latest block from seed host for now
-func (c *Client) GetLatestBlock(peer string) (*coin.Block, error) {
+func (c *Client) GetLatestBlockFromPeer(peer string) (*coin.Block, error) {
 	resp, err := http.Get(fmt.Sprintf("http://%s/latest-block", peer))
 	if err != nil {
 		return nil, err
@@ -107,9 +108,10 @@ func (c *Client) GetPeers() map[string]string {
 	return peers
 }
 
-func (c *Client) QueryPeers(peers map[string]string) error {
+// TODO: This will not work - cant simply take the longest chain - malice could have one block longer - should take the one that is 2 or 3 blocks longer
+func (c *Client) QueryPeersForBlockchain(peers map[string]string) error {
 	for address, _ := range peers {
-		block, err := c.GetLatestBlock(address)
+		block, err := c.GetLatestBlockFromPeer(address)
 		if err != nil {
 			return err
 		}
@@ -128,7 +130,6 @@ func (c *Client) QueryPeers(peers map[string]string) error {
 				return err
 			}
 
-			return nil
 		}
 
 		if len(c.Blockchain.Blocks) > 0 && block.Index > c.Blockchain.GetLastBlock().Index {
@@ -144,7 +145,15 @@ func (c *Client) QueryPeers(peers map[string]string) error {
 		}
 	}
 
+	replayBlockChainTransactions(*c.Blockchain)
+
 	return nil
+}
+
+func replayBlockChainTransactions(bc coin.Blockchain) {
+	for _, block := range bc.Blocks {
+		service.CommitBlockTransactions(block)
+	}
 }
 
 func (c *Client) BroadcastOnline(thisHostname string) {
@@ -164,7 +173,7 @@ func (c *Client) BroadcastOnline(thisHostname string) {
 	}
 }
 
-func (c *Client) BroadcastTransaction(tx wallet.Transaction) error {
+func (c *Client) BroadcastTransaction(tx repository.Transaction) error {
 	transaction, err := json.Marshal(tx)
 	if err != nil {
 		return err

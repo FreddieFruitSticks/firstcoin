@@ -11,25 +11,23 @@ const (
 )
 
 type BlockchainService struct {
-	Blockchain                 *coin.Blockchain
-	UnconfirmedTransactionPool *[]wallet.Transaction
-	Wallet                     *wallet.Wallet
+	Blockchain *coin.Blockchain
+	Wallet     *wallet.Wallet
 }
 
-func NewBlockchainService(b *coin.Blockchain, u *[]wallet.Transaction, w *wallet.Wallet) BlockchainService {
+func NewBlockchainService(b *coin.Blockchain, w *wallet.Wallet) BlockchainService {
 	return BlockchainService{
-		Blockchain:                 b,
-		UnconfirmedTransactionPool: u,
-		Wallet:                     w,
+		Blockchain: b,
+		Wallet:     w,
 	}
 }
 
 func (s *BlockchainService) CreateNextBlock() (*coin.Block, *coin.Blockchain, error) {
 	// coinbase transaction is the first transaction included by the miner
 	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(s.Wallet.Crypt, s.Blockchain.GetLastBlock().Index+1)
-	transactionPool := make([]wallet.Transaction, 0)
+	transactionPool := make([]repository.Transaction, 0)
 	transactionPool = append(transactionPool, coinbaseTransaction)
-	transactionPool = append(transactionPool, *s.UnconfirmedTransactionPool...)
+	transactionPool = append(transactionPool, repository.GetTxPool()...)
 	block := s.Blockchain.GenerateNextBlock(&transactionPool)
 
 	err := block.IsValidBlock(s.Blockchain.GetLastBlock())
@@ -56,13 +54,13 @@ func (s *BlockchainService) ValidateAndAddBlockToBlockchain(block coin.Block) er
 	}
 }
 
-func (s *BlockchainService) SpendMoney(receiverAddress []byte, amount int) (*wallet.Transaction, error) {
+func (s *BlockchainService) SpendMoney(receiverAddress []byte, amount int) (*repository.Transaction, error) {
 	transaction, _, err := s.Wallet.CreateTransaction(receiverAddress, amount)
 	if err != nil {
 		return nil, err
 	}
 
-	*s.UnconfirmedTransactionPool = append(*s.UnconfirmedTransactionPool, *transaction)
+	repository.AddTxToTxPool(*transaction)
 
 	return transaction, nil
 }
@@ -79,11 +77,13 @@ func CommitBlockTransactions(block coin.Block) {
 		}
 	}
 
-	// in here loop through transactions and update unspentTxOuts
+	// TODO: Just for now - need to only remove the txs that are in the block
+	repository.EmptyTxPool()
+
 }
 
-func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockchain) (coin.Blockchain, wallet.Transaction) {
-	genesisTransactionPool := make([]wallet.Transaction, 0)
+func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockchain) (coin.Blockchain, repository.Transaction) {
+	genesisTransactionPool := make([]repository.Transaction, 0)
 
 	// coinbase transaction is the first transaction included by the miner
 	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(crypt, 0)

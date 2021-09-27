@@ -34,7 +34,6 @@ func main() {
 	crypt.GenerateKeyPair()
 
 	fmt.Println(string(base64Encode(crypt.PublicKey)))
-	transactionPool := make([]wallet.Transaction, 0)
 
 	userWallet := wallet.NewWallet(*crypt)
 
@@ -45,7 +44,7 @@ func main() {
 		client = peer.NewClient(peers, blockchain, thisPeer)
 
 		p := client.GetPeers()
-		err := client.QueryPeers(p)
+		err := client.QueryPeersForBlockchain(p)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -57,7 +56,7 @@ func main() {
 
 	peers.AddHostname(thisPeer)
 
-	service := service.NewBlockchainService(blockchain, &transactionPool, userWallet)
+	service := service.NewBlockchainService(blockchain, userWallet)
 	coinServerHandler := peer.NewCoinServerHandler(service, client, peers)
 
 	server := peer.NewServer(*coinServerHandler)

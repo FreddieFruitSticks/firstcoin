@@ -1,6 +1,7 @@
 package coin
 
 import (
+	"blockchain/repository"
 	"blockchain/utils"
 	"blockchain/wallet"
 	"crypto/sha256"
@@ -12,17 +13,17 @@ import (
 )
 
 type Block struct {
-	Index           int                  `json:"index"`
-	PreviousHash    []byte               `json:"previousHash"`
-	Transactions    []wallet.Transaction `json:"transactions"`
-	Timestamp       int                  `json:"timeStamp"`
-	DifficultyLevel int                  `json:"difficultyLevel"`
-	Nonce           int                  `json:"nonce"`
-	Hash            []byte               `json:"hash"`
+	Index           int                      `json:"index"`
+	PreviousHash    []byte                   `json:"previousHash"`
+	Transactions    []repository.Transaction `json:"transactions"`
+	Timestamp       int                      `json:"timeStamp"`
+	DifficultyLevel int                      `json:"difficultyLevel"`
+	Nonce           int                      `json:"nonce"`
+	Hash            []byte                   `json:"hash"`
 }
 
 // TODO: loop over transaction hashes rather, maybe?
-func calculateBlockHash(index int, previousHash []byte, timestamp int, transactions []wallet.Transaction, difficultyLevel int) []byte {
+func calculateBlockHash(index int, previousHash []byte, timestamp int, transactions []repository.Transaction, difficultyLevel int) []byte {
 	msgHash := sha256.New()
 	concatenatedTransactionIDs := concatTransactionIDs(transactions)
 	_, err := msgHash.Write([]byte(fmt.Sprintf("%d%s%d%s%d", index, string(previousHash), timestamp, concatenatedTransactionIDs, difficultyLevel)))
@@ -31,7 +32,7 @@ func calculateBlockHash(index int, previousHash []byte, timestamp int, transacti
 	return msgHash.Sum(nil)
 }
 
-func GenesisBlock(seedDifficultyLevel int, transactionPool []wallet.Transaction) Block {
+func GenesisBlock(seedDifficultyLevel int, transactionPool []repository.Transaction) Block {
 	var prevHash []byte
 	beginning := int(time.Date(2021, time.August, 13, 0, 0, 0, 0, time.UTC).UnixNano())
 	blockHash := calculateBlockHash(0, prevHash, beginning, transactionPool, seedDifficultyLevel)
@@ -173,7 +174,7 @@ func hashBytes(blockString []byte) string {
 }
 
 // a SHA version of a transaction is a concatenation of all transaction IDs and all transaction input signatures
-func concatTransactionIDs(transactions []wallet.Transaction) []byte {
+func concatTransactionIDs(transactions []repository.Transaction) []byte {
 	concatTransaction := []byte{}
 
 	for _, transaction := range transactions {

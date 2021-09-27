@@ -33,7 +33,7 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 		}
 		txOuts = append(txOuts, txOut)
 
-		expectedTx := wallet.Transaction{
+		expectedTx := repository.Transaction{
 			ID:        []byte{},
 			TxIns:     txIns,
 			TxOuts:    txOuts,
@@ -125,7 +125,7 @@ func TestCreateTransaction(t *testing.T) {
 		txOuts = append(txOuts, txOutReceiver)
 		txOuts = append(txOuts, txOutSenderChange)
 
-		expectedSenderTx := wallet.Transaction{
+		expectedSenderTx := repository.Transaction{
 			ID:     []byte{},
 			TxIns:  txIns,
 			TxOuts: txOuts,
@@ -151,9 +151,6 @@ func TestCreateTransaction(t *testing.T) {
 		expectedSenderTx.Timestamp = now
 
 		expectedTxID := wallet.GenerateTransactionID(expectedSenderTx)
-		// uTxO.ID = expectedTxID
-
-		// senderWallet := wallet.NewWallet(uTxOSet, *senderCrypt)
 
 		// this should actually be the txID of a different, older, tx.
 		expectedSenderTx.ID = expectedTxID
@@ -302,7 +299,7 @@ func TestCreateTransaction(t *testing.T) {
 		txOuts = append(txOuts, txOutReceiver)
 		txOuts = append(txOuts, txOutSenderChange)
 
-		expectedSenderTx := wallet.Transaction{
+		expectedSenderTx := repository.Transaction{
 			ID:     []byte{},
 			TxIns:  txIns,
 			TxOuts: txOuts,

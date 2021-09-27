@@ -45,7 +45,7 @@ func (c *CoinServerHandler) latestBlock(r *http.Request) (*HTTPResponse, *HTTPEr
 func (c *CoinServerHandler) transaction(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
 	case "POST":
-		t := wallet.Transaction{}
+		t := repository.Transaction{}
 
 		err := readBody(r, &t)
 		if err != nil {
@@ -63,7 +63,7 @@ func (c *CoinServerHandler) transaction(r *http.Request) (*HTTPResponse, *HTTPEr
 			}
 		}
 
-		*c.BlockchainService.UnconfirmedTransactionPool = append(*c.BlockchainService.UnconfirmedTransactionPool, t)
+		repository.AddTxToTxPool(t)
 
 		return &HTTPResponse{
 			StatusCode: http.StatusCreated,
@@ -124,6 +124,22 @@ func (c *CoinServerHandler) spendMoney(r *http.Request) (*HTTPResponse, *HTTPErr
 		return &HTTPResponse{
 			StatusCode: http.StatusCreated,
 			Body:       transaction,
+		}, nil
+
+	}
+
+	return nil, &HTTPError{
+		Code: http.StatusMethodNotAllowed,
+	}
+}
+
+func (c *CoinServerHandler) getTxPool(r *http.Request) (*HTTPResponse, *HTTPError) {
+	switch r.Method {
+	case "GET":
+
+		return &HTTPResponse{
+			StatusCode: http.StatusOK,
+			Body:       repository.GetTxPool(),
 		}, nil
 
 	}

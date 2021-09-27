@@ -12,13 +12,6 @@ import (
 
 const COINBASE_TRANSACTION_AMOUNT = 10
 
-type Transaction struct {
-	ID        []byte            `json:"id"`
-	TxIns     []repository.TxIn `json:"transactionInputs"`
-	TxOuts    []repository.TxO  `json:"transactionOutputs"`
-	Timestamp int               `json:"timestamp"`
-}
-
 type Wallet struct {
 	Crypt Cryptographic
 }
@@ -29,7 +22,7 @@ func NewWallet(c Cryptographic) *Wallet {
 	}
 }
 
-func (w *Wallet) CreateTransaction(receiverAddress []byte, amount int) (*Transaction, int, error) {
+func (w *Wallet) CreateTransaction(receiverAddress []byte, amount int) (*repository.Transaction, int, error) {
 	txIns := make([]repository.TxIn, 0)
 	txOuts := make([]repository.TxO, 0)
 
@@ -54,7 +47,7 @@ func (w *Wallet) CreateTransaction(receiverAddress []byte, amount int) (*Transac
 		txOuts = append(txOuts, txO)
 	}
 
-	transaction := Transaction{
+	transaction := repository.Transaction{
 		TxIns:  txIns,
 		TxOuts: txOuts,
 	}
@@ -77,7 +70,7 @@ func (w *Wallet) CreateTransaction(receiverAddress []byte, amount int) (*Transac
 	return &transaction, now, nil
 }
 
-func CreateCoinbaseTransaction(crypt Cryptographic, blockIndex int) (Transaction, int) {
+func CreateCoinbaseTransaction(crypt Cryptographic, blockIndex int) (repository.Transaction, int) {
 	// First create the transaction with TxIns and TxOuts - tx id and txIn signature are not included yet
 	txIns := make([]repository.TxIn, 0)
 	txOuts := make([]repository.TxO, 0)
@@ -99,7 +92,7 @@ func CreateCoinbaseTransaction(crypt Cryptographic, blockIndex int) (Transaction
 
 	now := int(time.Now().UnixNano())
 
-	transaction := Transaction{
+	transaction := repository.Transaction{
 		TxIns:     txIns,
 		TxOuts:    txOuts,
 		Timestamp: now,
@@ -118,7 +111,7 @@ func CreateCoinbaseTransaction(crypt Cryptographic, blockIndex int) (Transaction
 }
 
 // This is a SHA of all txIns (excluding signature - that gets added later) and txOuts
-func GenerateTransactionID(transaction Transaction) []byte {
+func GenerateTransactionID(transaction repository.Transaction) []byte {
 	msgHash := sha256.New()
 	concatTxIn := ""
 	concatTxOut := ""
@@ -137,16 +130,12 @@ func GenerateTransactionID(transaction Transaction) []byte {
 	return msgHash.Sum(nil)
 }
 
-func (t Transaction) String() string {
-	return fmt.Sprintf("txId: %s\ntxIns: %+v\ntxOuts: %+v", t.ID, t.TxIns, t.TxOuts)
-}
-
 type prettyTxO struct {
 	Address string
 	Amount  int
 }
 
-func AreValidTransactions(transactions []Transaction, blockIndex int) error {
+func AreValidTransactions(transactions []repository.Transaction, blockIndex int) error {
 	if len(transactions) == 0 {
 		return fmt.Errorf("Invalid transactions. Cant have empty transactions")
 	}
@@ -167,7 +156,7 @@ func AreValidTransactions(transactions []Transaction, blockIndex int) error {
 	return nil
 }
 
-func IsValidTransaction(transaction Transaction) error {
+func IsValidTransaction(transaction repository.Transaction) error {
 	if len(transaction.TxIns) < 1 {
 		return fmt.Errorf("Invalid transaction: txIns length must be > 0")
 	}
@@ -202,7 +191,7 @@ func IsValidTransaction(transaction Transaction) error {
 	return nil
 }
 
-func IsValidCoinbaseTransaction(transaction Transaction, blockIndex int) error {
+func IsValidCoinbaseTransaction(transaction repository.Transaction, blockIndex int) error {
 	if len(transaction.TxIns) != 1 {
 		return fmt.Errorf("Invalid coinbase transaction txIns length > 0")
 	}
@@ -227,7 +216,7 @@ func IsValidCoinbaseTransaction(transaction Transaction, blockIndex int) error {
 	return nil
 }
 
-func VerifyTransactionAmount(tx Transaction) error {
+func VerifyTransactionAmount(tx repository.Transaction) error {
 	totalAmountFromUTxOs := 0
 
 	for _, txIn := range tx.TxIns {

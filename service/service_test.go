@@ -33,7 +33,7 @@ func TestUpdateUTxOSet(t *testing.T) {
 			t.Fatalf(err.Error())
 		}
 
-		transactionPool := make([]wallet.Transaction, 0)
+		transactionPool := make([]repository.Transaction, 0)
 		transactionPool = append(transactionPool, *tx)
 
 		block := blockchain.GenerateNextBlock(&transactionPool)
