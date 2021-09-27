@@ -6,6 +6,7 @@ import (
 	"blockchain/service"
 	"blockchain/wallet"
 	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -21,25 +22,6 @@ func TestUpdateUTxOSet(t *testing.T) {
 
 		expectedUTxOSet := repository.UTxOSetType(make(map[repository.PublicKeyAddressType]map[repository.TxIDType]repository.UTxO, 0))
 
-		uTxO1 := repository.UTxO{
-			ID:     repository.UTxOID{},
-			Index:  0,
-			Amount: 10,
-		}
-
-		// uTxO2 := repository.UTxO{
-		// 	ID: repository.UTxOID{
-		// 		TxID:    previousTxID2,
-		// 		Address: senderCrypt.PublicKey,
-		// 	},
-		// 	Index:  1,
-		// 	Amount: 50,
-		// }
-
-		uTxOTxIDMap := make(map[repository.TxIDType]repository.UTxO)
-		uTxOTxIDMap[repository.TxIDType(senderCrypt.PublicKey)] = uTxO1
-		expectedUTxOSet[repository.PublicKeyAddressType(senderCrypt.PublicKey)] = uTxOTxIDMap
-
 		senderWallet := wallet.NewWallet(*senderCrypt)
 
 		blocks := make([]coin.Block, 0)
@@ -54,48 +36,41 @@ func TestUpdateUTxOSet(t *testing.T) {
 		transactionPool := make([]wallet.Transaction, 0)
 		transactionPool = append(transactionPool, *tx)
 
-		// bs := service.NewBlockchainService(blockchain, &transactionPool, &uTxOSet, senderWallet)
-
-		// _ = blockchain.GenerateNextBlock(&transactionPool)
 		block := blockchain.GenerateNextBlock(&transactionPool)
 		service.CommitBlockTransactions(block)
 
-		// if !reflect.DeepEqual(repository.GetEntireUTxOSet(), expectedUTxOSet) {
-		// 	fmt.Printf("%+v\n", repository.GetEntireUTxOSet())
-		// 	fmt.Printf("-------------------\n")
-		// 	fmt.Printf("%+v\n", expectedUTxOSet)
-		// 	t.Fatalf("")
-		// }
+		uTxO1 := repository.UTxO{
+			ID: repository.UTxOID{
+				Address: senderCrypt.PublicKey,
+				TxID:    tx.ID,
+			},
+			Index:  1,
+			Amount: 5,
+		}
 
-		senderLedger := repository.GetUserLedger(senderCrypt.PublicKey)
-		receiverLedger := repository.GetUserLedger(receiverCrypt.PublicKey)
+		uTxO2 := repository.UTxO{
+			ID: repository.UTxOID{
+				Address: receiverCrypt.PublicKey,
+				TxID:    tx.ID,
+			},
+			Index:  1,
+			Amount: 5,
+		}
 
-		fmt.Printf("%+v\n", senderLedger)
-		fmt.Println("----------------")
-		fmt.Printf("%+v\n", receiverLedger)
+		uTxOTxIDMapSender := make(map[repository.TxIDType]repository.UTxO)
+		uTxOTxIDMapSender[repository.TxIDType(tx.ID)] = uTxO1
+		uTxOTxIDMapReceiver := make(map[repository.TxIDType]repository.UTxO)
+		uTxOTxIDMapReceiver[repository.TxIDType(tx.ID)] = uTxO2
 
-		// expectedUTxO1 := repository.UTxO{
-		// 	ID: repository.UTxOID{
-		// 		TxID:    previousTxID,
-		// 		Address: senderCrypt.PublicKey,
-		// 	},
-		// 	Index:  1,
-		// 	Amount: 70,
-		// }
+		expectedUTxOSet[repository.PublicKeyAddressType(senderCrypt.PublicKey)] = uTxOTxIDMapSender
+		expectedUTxOSet[repository.PublicKeyAddressType(receiverCrypt.PublicKey)] = uTxOTxIDMapReceiver
 
-		// uTxO2 := repository.UTxO{
-		// 	ID: repository.UTxOID{
-		// 		TxID:    previousTxID2,
-		// 		Address: senderCrypt.PublicKey,
-		// 	},
-		// 	Index:  1,
-		// 	Amount: 50,
-		// }
-
-		// uTxOTxIDMap := make(map[repository.TxIDType]repository.UTxO)
-		// uTxOTxIDMap[repository.TxIDType(previousTxID)] = uTxO1
-		// uTxOTxIDMap[repository.TxIDType(previousTxID2)] = uTxO2
-		// uTxOSet[repository.PublicKeyAddressType(senderCrypt.PublicKey)] = uTxOTxIDMap
+		if !reflect.DeepEqual(expectedUTxOSet, repository.GetEntireUTxOSet()) {
+			fmt.Printf("%+v\n", repository.GetEntireUTxOSet())
+			fmt.Printf("-------------------\n")
+			fmt.Printf("%+v\n", expectedUTxOSet)
+			t.Fatalf("")
+		}
 
 	})
 }

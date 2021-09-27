@@ -37,6 +37,7 @@ func (s *BlockchainService) CreateNextBlock() (*coin.Block, *coin.Blockchain, er
 		return nil, nil, err
 	}
 
+	// TODO: Need to be careful here. Should we be committing and adding blocks before the "network" has accepted it? Doubtful
 	s.Blockchain.AddBlock(block)
 
 	CommitBlockTransactions(block)
