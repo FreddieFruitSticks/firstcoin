@@ -36,10 +36,10 @@ func (c *Client) BroadcastBlock(block coin.Block) coin.Block {
 			body := bytes.NewReader(j)
 			resp, err := http.Post(fmt.Sprintf("http://%s/block", peer), "application/json", body)
 			if resp.StatusCode >= 400 {
-				utils.Logger.Println(fmt.Sprintf("error from peer when broadcasting block %s", readResponseBody(resp.Body)))
+				utils.ErrorLogger.Println(fmt.Sprintf("error from peer when broadcasting block %s", readResponseBody(resp.Body)))
 			}
 			if err != nil {
-				utils.Logger.Println(fmt.Sprintf("error when posting block %s", err))
+				utils.ErrorLogger.Println(fmt.Sprintf("error when posting block %s", err))
 
 				// Remove host if error for now
 				c.Peers.RemoveHostname(peer)

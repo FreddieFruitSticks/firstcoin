@@ -34,7 +34,7 @@ func (s *BlockchainService) CreateNextBlock() (*coin.Block, *coin.Blockchain, er
 
 	err := block.IsValidBlock(s.Blockchain.GetLastBlock())
 	if err != nil {
-		utils.Logger.Println(fmt.Sprintf("Error in createNextBlock. err: %s", err))
+		utils.ErrorLogger.Println(fmt.Sprintf("Error in createNextBlock. err: %s", err))
 		return nil, nil, err
 	}
 

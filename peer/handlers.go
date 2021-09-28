@@ -239,8 +239,16 @@ func (c *CoinServerHandler) addBlockToBlockchain(r *http.Request) (*HTTPResponse
 			}
 		}
 
+		if block.Index == c.BlockchainService.Blockchain.GetLastBlock().Index {
+			utils.InfoLogger.Println("Block already exists in blockchain")
+			return &HTTPResponse{
+				StatusCode: http.StatusNotModified,
+				Body:       c.BlockchainService.Blockchain,
+			}, nil
+		}
+
 		if err := block.IsValidBlock(c.BlockchainService.Blockchain.GetLastBlock()); err != nil {
-			utils.Logger.Println(err)
+			utils.ErrorLogger.Println(err)
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
 				Message: fmt.Sprintf("Could not update blockchain. error: %s", err.Error()),
