@@ -27,23 +27,22 @@ func NewClient(p *Peers, b *coin.Blockchain, t string) *Client {
 	}
 }
 
-func (c *Client) BroadcastBlock(block coin.Block, thisPeer string) coin.Block {
+func (c *Client) BroadcastBlock(block coin.Block) coin.Block {
 	j, err := json.Marshal(block)
 	utils.CheckError(err)
 
 	for _, peer := range c.Peers.Hostnames {
-		if peer != thisPeer {
+		if peer != c.ThisPeer {
 			body := bytes.NewReader(j)
 			resp, err := http.Post(fmt.Sprintf("http://%s/block", peer), "application/json", body)
+			if resp.StatusCode >= 400 {
+				utils.Logger.Println(fmt.Sprintf("error from peer when broadcasting block %s", readResponseBody(resp.Body)))
+			}
 			if err != nil {
-				fmt.Println(err)
+				utils.Logger.Println(fmt.Sprintf("error when posting block %s", err))
 
 				// Remove host if error for now
 				c.Peers.RemoveHostname(peer)
-			} else {
-				if resp.StatusCode >= 400 {
-					c.Peers.RemoveHostname(peer)
-				}
 			}
 
 		}

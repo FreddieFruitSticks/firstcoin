@@ -84,29 +84,22 @@ func (b *Block) IsValidBlock(previousBlock Block) error {
 
 	if !validateNewBlockDifficulty(*b) {
 		return fmt.Errorf("Invalid block: %s", "invalid difficulty")
-
 	}
 
 	if b.Timestamp <= previousBlock.Timestamp {
 		return fmt.Errorf("Invalid block: %s", "invalid timestamps")
-
 	}
 
 	if err := wallet.AreValidTransactions(b.Transactions, b.Index); err != nil {
 		return fmt.Errorf("Invalid block: %s. error: %s", "invalid transactions", err.Error())
+	}
 
+	// validate that the current block's timestamp isnt more than 10s in the future
+	if (int(time.Now().UnixNano()) - b.Timestamp) > 10*NANO_SECONDS {
+		return fmt.Errorf("Invalid block: %s", "invalid block timestamp")
 	}
 
 	return nil
-}
-
-// validate that the current block's timestamp isnt more than 10s in the future
-func (b *Block) ValidTimestampToNow() bool {
-	if (int(time.Now().UnixNano()) - b.Timestamp) > 10*NANO_SECONDS {
-		return false
-	}
-
-	return true
 }
 
 func validateNewBlockDifficulty(b Block) bool {

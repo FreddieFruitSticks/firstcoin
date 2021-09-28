@@ -29,6 +29,7 @@ func main() {
 	blockchain := coin.NewBlockchain(blocks)
 
 	thisPeer := fmt.Sprintf("localhost:%s", port)
+
 	peers := peer.NewPeers()
 	crypt := wallet.NewCryptographic()
 	crypt.GenerateKeyPair()

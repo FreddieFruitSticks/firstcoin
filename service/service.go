@@ -3,7 +3,9 @@ package service
 import (
 	"blockchain/coin"
 	"blockchain/repository"
+	"blockchain/utils"
 	"blockchain/wallet"
+	"fmt"
 )
 
 const (
@@ -32,26 +34,11 @@ func (s *BlockchainService) CreateNextBlock() (*coin.Block, *coin.Blockchain, er
 
 	err := block.IsValidBlock(s.Blockchain.GetLastBlock())
 	if err != nil {
+		utils.Logger.Println(fmt.Sprintf("Error in createNextBlock. err: %s", err))
 		return nil, nil, err
 	}
 
-	// TODO: Need to be careful here. Should we be committing and adding blocks before the "network" has accepted it? Doubtful
-	s.Blockchain.AddBlock(block)
-
-	CommitBlockTransactions(block)
-
 	return &block, s.Blockchain, err
-}
-
-func (s *BlockchainService) ValidateAndAddBlockToBlockchain(block coin.Block) error {
-	if err := block.IsValidBlock(s.Blockchain.GetLastBlock()); err == nil && block.ValidTimestampToNow() {
-		s.Blockchain.AddBlock(block)
-		CommitBlockTransactions(block)
-		// TODO: when this node receives a valid block, it must remove transactions from its own pool that exist in the blocks transactions data
-		return nil
-	} else {
-		return err
-	}
 }
 
 func (s *BlockchainService) SpendMoney(receiverAddress []byte, amount int) (*repository.Transaction, error) {

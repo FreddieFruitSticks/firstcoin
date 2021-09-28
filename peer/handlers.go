@@ -4,6 +4,7 @@ import (
 	"blockchain/coin"
 	"blockchain/repository"
 	"blockchain/service"
+	"blockchain/utils"
 	"blockchain/wallet"
 	"encoding/json"
 	"fmt"
@@ -149,6 +150,38 @@ func (c *CoinServerHandler) getTxPool(r *http.Request) (*HTTPResponse, *HTTPErro
 	}
 }
 
+func (c *CoinServerHandler) getTxSet(r *http.Request) (*HTTPResponse, *HTTPError) {
+	switch r.Method {
+	case "GET":
+
+		return &HTTPResponse{
+			StatusCode: http.StatusOK,
+			Body:       repository.GetEntireUTxOSet(),
+		}, nil
+
+	}
+
+	return nil, &HTTPError{
+		Code: http.StatusMethodNotAllowed,
+	}
+}
+
+func (c *CoinServerHandler) getBlockchain(r *http.Request) (*HTTPResponse, *HTTPError) {
+	switch r.Method {
+	case "GET":
+
+		return &HTTPResponse{
+			StatusCode: http.StatusOK,
+			Body:       c.BlockchainService.Blockchain.Blocks,
+		}, nil
+
+	}
+
+	return nil, &HTTPError{
+		Code: http.StatusMethodNotAllowed,
+	}
+}
+
 func (c *CoinServerHandler) peers(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
 	case "POST":
@@ -206,13 +239,22 @@ func (c *CoinServerHandler) addBlockToBlockchain(r *http.Request) (*HTTPResponse
 			}
 		}
 
-		err = c.BlockchainService.ValidateAndAddBlockToBlockchain(block)
-		if err != nil {
+		if err := block.IsValidBlock(c.BlockchainService.Blockchain.GetLastBlock()); err != nil {
+			utils.Logger.Println(err)
 			return nil, &HTTPError{
-				Code:    http.StatusInternalServerError,
+				Code:    http.StatusBadRequest,
 				Message: fmt.Sprintf("Could not update blockchain. error: %s", err.Error()),
 			}
 		}
+
+		// TODO: This needs to be added to a fork (need to implement forks first). It is not a given that the block should be accepted
+		//just because it has valid POW, and "fits" on to the chain.
+		c.BlockchainService.Blockchain.AddBlock(block)
+		service.CommitBlockTransactions(block)
+
+		// this is relaying an accepted block to the network. Right now it simply sends to all the peers. The node that originally sent
+		// the block only adds it block to its own chain if it receives it back from the network.
+		c.Client.BroadcastBlock(block)
 
 		return &HTTPResponse{
 			StatusCode: http.StatusCreated,
@@ -244,8 +286,7 @@ func (c *CoinServerHandler) createBlock(r *http.Request) (*HTTPResponse, *HTTPEr
 				Message: err.Error(),
 			}
 		}
-
-		c.Client.BroadcastBlock(*block, c.Client.ThisPeer)
+		c.Client.BroadcastBlock(*block)
 
 		payload := struct {
 			Blocks              []coin.Block                                                                `json:"blocks"`

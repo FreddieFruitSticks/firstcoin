@@ -26,7 +26,9 @@ func (s *Server) HandleServer(port string) {
 
 	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock)) // control endpoint
 	http.HandleFunc("/spend-money", JSONHandler(s.CoinServerHandler.spendMoney))   // control endpoint
-	http.HandleFunc("/get-txpool", JSONHandler(s.CoinServerHandler.getTxPool))     // control endpoint
+	http.HandleFunc("/txpool", JSONHandler(s.CoinServerHandler.getTxPool))         // control endpoint
+	http.HandleFunc("/txset", JSONHandler(s.CoinServerHandler.getTxSet))           // control endpoint
+	http.HandleFunc("/blockchain", JSONHandler(s.CoinServerHandler.getBlockchain)) // control endpoint
 
 	http.HandleFunc("/block", JSONHandler(s.CoinServerHandler.addBlockToBlockchain))
 	http.HandleFunc("/block-chain", JSONHandler(s.CoinServerHandler.blockChain))
