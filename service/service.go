@@ -29,7 +29,7 @@ func (s *BlockchainService) CreateNextBlock() (*coin.Block, *coin.Blockchain, er
 	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(s.Wallet.Crypt, s.Blockchain.GetLastBlock().Index+1)
 	transactionPool := make([]repository.Transaction, 0)
 	transactionPool = append(transactionPool, coinbaseTransaction)
-	transactionPool = append(transactionPool, repository.GetTxPool()...)
+	transactionPool = append(transactionPool, repository.GetTxPoolArray()...)
 	block := s.Blockchain.GenerateNextBlock(&transactionPool)
 
 	err := block.IsValidBlock(s.Blockchain.GetLastBlock())
@@ -81,4 +81,15 @@ func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockch
 	blockchain.AddBlock(coin.GenesisBlock(SeedDifficultyLevel, genesisTransactionPool))
 
 	return blockchain, coinbaseTransaction
+}
+
+func (s *BlockchainService) AddTxToTxPool(tx repository.Transaction) bool {
+	tx, ok := repository.GetTxFromTxPool(tx.ID)
+	if ok {
+		return false
+	}
+
+	repository.AddTxToTxPool(tx)
+
+	return true
 }

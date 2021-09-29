@@ -92,6 +92,23 @@ func (c *Client) GetLatestBlockFromPeer(peer string) (*coin.Block, error) {
 	return &block, nil
 }
 
+func (c *Client) GetTxPoolFromPeer(peer string) (map[repository.TxIDType]repository.Transaction, error) {
+	resp, err := http.Get(fmt.Sprintf("http://%s/txpool", peer))
+	if err != nil {
+		return nil, err
+	}
+
+	respBody, err := ioutil.ReadAll(resp.Body)
+	var txPool map[repository.TxIDType]repository.Transaction
+
+	err = json.Unmarshal(respBody, &txPool)
+	if err != nil {
+		return nil, err
+	}
+
+	return txPool, nil
+}
+
 func (c *Client) GetPeers() map[string]string {
 	resp, err := http.Get(fmt.Sprintf("http://%s/peers", seedHost))
 	utils.CheckError(err)
@@ -149,10 +166,20 @@ func (c *Client) QueryPeersForBlockchain(peers map[string]string) error {
 	return nil
 }
 
-func replayBlockChainTransactions(bc coin.Blockchain) {
-	for _, block := range bc.Blocks {
-		service.CommitBlockTransactions(block)
+func (c *Client) QueryNetworkForUnconfirmedTxPool(peers map[string]string) error {
+	for address, _ := range peers {
+		txPool, err := c.GetTxPoolFromPeer(address)
+		if err != nil {
+			utils.ErrorLogger.Println(fmt.Sprintf("couldn't fetch txpool from peer %s. error: %s", address, err))
+			continue
+		}
+
+		repository.SetTxPool(txPool)
+		return nil
 	}
+
+	return fmt.Errorf("could not find txpool from any of the peers")
+
 }
 
 func (c *Client) BroadcastOnline(thisHostname string) {
@@ -183,7 +210,12 @@ func (c *Client) BroadcastTransaction(tx repository.Transaction) error {
 			body := bytes.NewReader(transaction)
 			resp, err := http.Post(fmt.Sprintf("http://%s/transaction", peer), "application/json", body)
 			if err != nil {
-				return fmt.Errorf("peer %s rejected transaction. error: %s", peer, readResponseBody(resp.Body))
+				utils.ErrorLogger.Println(fmt.Sprintf("peer %s rejected transaction. error: %s", peer, err))
+				continue
+			}
+
+			if resp.StatusCode >= 400 {
+				utils.ErrorLogger.Println(fmt.Sprintf("peer %s rejected transaction. error: %s", peer, err))
 			}
 
 		}
@@ -196,4 +228,10 @@ func readResponseBody(body io.ReadCloser) string {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(body)
 	return buf.String()
+}
+
+func replayBlockChainTransactions(bc coin.Blockchain) {
+	for _, block := range bc.Blocks {
+		service.CommitBlockTransactions(block)
+	}
 }

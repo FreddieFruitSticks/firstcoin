@@ -1,5 +1,10 @@
 package repository
 
+import (
+	"encoding/base64"
+	"fmt"
+)
+
 var uTxOSet = UTxOSetType(make(map[PublicKeyAddressType]map[TxIDType]UTxO, 0))
 
 type PublicKeyAddressType string
@@ -70,4 +75,18 @@ func RemoveUTxOFromSender(txIn TxIn) {
 
 func ClearUTxOSet() {
 	uTxOSet = UTxOSetType(make(map[PublicKeyAddressType]map[TxIDType]UTxO, 0))
+}
+
+func (t TxIn) String() string {
+	return fmt.Sprintf("uTxOID: %s\nuTxOIndex: %+v\ntxOuts: %+v\n", t.UTxOID, t.UTxOIndex, Base64Encode(t.Signature))
+}
+
+func (t UTxOID) String() string {
+	return fmt.Sprintf("Address: %s\nTxID: %+v\n", Base64Encode(t.Address), t.TxID)
+}
+
+func Base64Encode(message []byte) []byte {
+	b := make([]byte, base64.StdEncoding.EncodedLen(len(message)))
+	base64.StdEncoding.Encode(b, message)
+	return b
 }

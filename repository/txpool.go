@@ -9,20 +9,45 @@ type Transaction struct {
 	Timestamp int    `json:"timestamp"`
 }
 
-var unconfirmedTransactionPool = make([]Transaction, 0)
+var unconfirmedTransactionPool = make(map[TxIDType]Transaction, 0)
 
 func (t Transaction) String() string {
-	return fmt.Sprintf("txId: %s\ntxIns: %+v\ntxOuts: %+v", t.ID, t.TxIns, t.TxOuts)
+	return fmt.Sprintf("txId: %s\ntxIns: %+v\ntxOuts: %+v\n", t.ID, t.TxIns, t.TxOuts)
 }
 
 func AddTxToTxPool(txs ...Transaction) {
-	unconfirmedTransactionPool = append(unconfirmedTransactionPool, txs...)
+	for _, tx := range txs {
+		unconfirmedTransactionPool[TxIDType(tx.ID)] = tx
+	}
 }
 
-func GetTxPool() []Transaction {
+func GetTxPool() map[TxIDType]Transaction {
 	return unconfirmedTransactionPool
 }
 
+func GetTxFromTxPool(txId []byte) (Transaction, bool) {
+	tx, ok := unconfirmedTransactionPool[TxIDType(txId)]
+	return tx, ok
+}
+
+func GetTxPoolArray() []Transaction {
+	txPool := make([]Transaction, 0)
+
+	for _, tx := range unconfirmedTransactionPool {
+		txPool = append(txPool, tx)
+	}
+
+	return txPool
+}
+
+func SetTxPool(txPool map[TxIDType]Transaction) {
+	unconfirmedTransactionPool = txPool
+}
+
+func IsValidTxPool() error {
+
+}
+
 func EmptyTxPool() {
-	unconfirmedTransactionPool = make([]Transaction, 0)
+	unconfirmedTransactionPool = make(map[TxIDType]Transaction, 0)
 }

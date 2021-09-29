@@ -46,9 +46,9 @@ func (c *CoinServerHandler) latestBlock(r *http.Request) (*HTTPResponse, *HTTPEr
 func (c *CoinServerHandler) transaction(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
 	case "POST":
-		t := repository.Transaction{}
+		tx := repository.Transaction{}
 
-		err := readBody(r, &t)
+		err := readBody(r, &tx)
 		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
@@ -56,7 +56,7 @@ func (c *CoinServerHandler) transaction(r *http.Request) (*HTTPResponse, *HTTPEr
 			}
 		}
 
-		err = wallet.IsValidTransaction(t)
+		err = wallet.IsValidTransaction(tx)
 		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
@@ -64,11 +64,15 @@ func (c *CoinServerHandler) transaction(r *http.Request) (*HTTPResponse, *HTTPEr
 			}
 		}
 
-		repository.AddTxToTxPool(t)
+		ok := c.BlockchainService.AddTxToTxPool(tx)
+		if ok {
+			utils.InfoLogger.Println("Received Tx added to pool. Relaying tx")
+			c.Client.BroadcastTransaction(tx)
+		}
 
 		return &HTTPResponse{
 			StatusCode: http.StatusCreated,
-			Body:       t,
+			Body:       tx,
 		}, nil
 	}
 

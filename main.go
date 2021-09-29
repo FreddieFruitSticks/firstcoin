@@ -3,9 +3,10 @@ package main
 import (
 	"blockchain/coin"
 	"blockchain/peer"
+	"blockchain/repository"
 	"blockchain/service"
+	"blockchain/utils"
 	"blockchain/wallet"
-	"encoding/base64"
 	"fmt"
 	"os"
 )
@@ -34,7 +35,7 @@ func main() {
 	crypt := wallet.NewCryptographic()
 	crypt.GenerateKeyPair()
 
-	fmt.Println(string(base64Encode(crypt.PublicKey)))
+	fmt.Println(string(repository.Base64Encode(crypt.PublicKey)))
 
 	userWallet := wallet.NewWallet(*crypt)
 
@@ -50,8 +51,12 @@ func main() {
 			fmt.Println(err)
 			return
 		}
+		err = client.QueryNetworkForUnconfirmedTxPool(p)
+		if err != nil {
+			return
+		}
 
-		fmt.Println(p)
+		utils.InfoLogger.Println(p)
 		client.BroadcastOnline(thisPeer)
 	}
 
@@ -63,10 +68,4 @@ func main() {
 	server := peer.NewServer(*coinServerHandler)
 
 	server.HandleServer(args[0])
-}
-
-func base64Encode(message []byte) []byte {
-	b := make([]byte, base64.StdEncoding.EncodedLen(len(message)))
-	base64.StdEncoding.Encode(b, message)
-	return b
 }
