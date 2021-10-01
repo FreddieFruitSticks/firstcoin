@@ -271,18 +271,14 @@ func IsValidUTxOStructure(uTxO repository.UTxO) error {
 }
 
 func IsValidTxIn(txIn repository.TxIn, uTxOSet repository.UTxOSetType) error {
-	fmt.Println("!!!!!!!!!!!!!!!!!!!")
-	fmt.Println(uTxOSet)
 	spenderLedger, ok := uTxOSet[repository.PublicKeyAddressType(txIn.UTxOID.Address)]
+
+	// This means that spender cant use the same uTxO in the same mempool. when validating entire pool the utxo will disappear.
 	if !ok {
 		return fmt.Errorf("invalid txIn. spender ledger does not exist")
 	}
-	fmt.Println("****************")
-	fmt.Println(spenderLedger)
 
-	u, ok := spenderLedger[repository.TxIDType(txIn.UTxOID.TxID)]
-	fmt.Println("-------------")
-	fmt.Println(u)
+	_, ok = spenderLedger[repository.TxIDType(txIn.UTxOID.TxID)]
 	if !ok {
 		return fmt.Errorf("invalid txIn. spender uTxO does not exist")
 	}
@@ -335,6 +331,7 @@ func AreValidTxOuts(txOuts []repository.TxO) error {
 }
 
 // finding the senders UTxOs that can service the Tx amount - currently the strategy is simply to take the first set of uTxOs
+// that is not already included in the txPool. With the idea of parent-child txs can maybe have multiple txs on single uTxO???
 func (w *Wallet) FindUTxOs(amount int) ([]repository.UTxO, int, error) {
 	spenderUTxOs := repository.GetUserLedger(w.Crypt.PublicKey)
 	uTxOs := make([]repository.UTxO, 0)
@@ -342,17 +339,19 @@ func (w *Wallet) FindUTxOs(amount int) ([]repository.UTxO, int, error) {
 	totalAmount := 0
 
 	for _, uTxO := range spenderUTxOs {
-		if totalAmount < amount {
+		if totalAmount < amount && !isUTxOInTxPool(uTxO) {
 			uTxOs = append(uTxOs, uTxO)
 			totalAmount += uTxO.Amount
 			continue
 		}
 
-		break
+		if totalAmount >= amount {
+			break
+		}
 	}
 
 	if totalAmount < amount {
-		return nil, totalAmount, fmt.Errorf("insufficient funds")
+		return nil, totalAmount, fmt.Errorf("insufficient funds or no available uTxOs")
 	}
 
 	return uTxOs, totalAmount, nil
@@ -397,4 +396,16 @@ func validateUTxOsCanServiceAmount(uTxOs []repository.UTxO, amount int) (bool, i
 	}
 
 	return totalAmount >= amount, totalAmount
+}
+
+func isUTxOInTxPool(uTxO repository.UTxO) bool {
+	txPool := repository.GetTxPool()
+
+	for _, v := range txPool {
+		if reflect.DeepEqual(uTxO.ID.TxID, v.TxIns[0].UTxOID.TxID) {
+			return true
+		}
+	}
+
+	return false
 }

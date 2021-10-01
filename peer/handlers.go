@@ -64,7 +64,6 @@ func (c *CoinServerHandler) receiveTransaction(r *http.Request) (*HTTPResponse, 
 				Body:       tx,
 			}, nil
 		}
-		utils.ErrorLogger.Println(tx)
 
 		err = wallet.IsValidTransaction(tx)
 		if err != nil {
