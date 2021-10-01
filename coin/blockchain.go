@@ -38,7 +38,6 @@ func (b *Blockchain) GenerateNextBlock(transactionPool *[]repository.Transaction
 	previousBlock := b.GetLastBlock()
 	now := int(time.Now().UnixNano())
 	currentDifficultyLevel := b.getDifficultyLevel()
-	fmt.Println("current difficulty: ", currentDifficultyLevel)
 	hash := calculateBlockHash(previousBlock.Index+1, previousBlock.Hash, now, *transactionPool, currentDifficultyLevel)
 	nonce := ProofOfWork(hash, currentDifficultyLevel)
 

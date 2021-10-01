@@ -20,6 +20,43 @@ func isSeedHost(port string) bool {
 	return false
 }
 
+// func main() {
+// 	m := make(map[string]map[string]Person)
+// 	p1 := make(map[string]Person)
+// 	p := Person{
+// 		height: 2,
+// 	}
+// 	p1["1"] = p
+// 	m["1"] = p1
+
+// 	newMap := make(map[string]map[string]Person)
+// 	for k, v := range m {
+// 		newMap[k] = v
+// 	}
+
+// 	myFunc(newMap)
+
+// 	fmt.Println("out func")
+
+// 	fmt.Println(m)
+// }
+
+// type Person struct {
+// 	height int
+// }
+
+// func myFunc(person map[string]map[string]Person) {
+// 	p1 := make(map[string]Person)
+// 	p := Person{
+// 		height: 3,
+// 	}
+// 	p1["1"] = p
+
+// 	person["1"] = p1
+// 	fmt.Println("in func")
+// 	fmt.Println(person)
+// }
+
 func main() {
 	args := os.Args[1:]
 	port := args[0]

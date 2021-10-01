@@ -25,7 +25,7 @@ func (s *Server) HandleServer(port string) {
 	})
 
 	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock)) // control endpoint
-	http.HandleFunc("/spend-money", JSONHandler(s.CoinServerHandler.spendMoney))   // control endpoint
+	http.HandleFunc("/spend-coin", JSONHandler(s.CoinServerHandler.spendCoin))     // control endpoint
 	http.HandleFunc("/txpool", JSONHandler(s.CoinServerHandler.getTxPool))         // control endpoint
 	http.HandleFunc("/txset", JSONHandler(s.CoinServerHandler.getTxSet))           // control endpoint
 	http.HandleFunc("/blockchain", JSONHandler(s.CoinServerHandler.getBlockchain)) // control endpoint
@@ -35,7 +35,7 @@ func (s *Server) HandleServer(port string) {
 	http.HandleFunc("/peers", JSONHandler(s.CoinServerHandler.peers))
 	http.HandleFunc("/notify", JSONHandler(s.CoinServerHandler.peers))
 	http.HandleFunc("/latest-block", JSONHandler(s.CoinServerHandler.latestBlock))
-	http.HandleFunc("/transaction", JSONHandler(s.CoinServerHandler.transaction))
+	http.HandleFunc("/transaction", JSONHandler(s.CoinServerHandler.receiveTransaction))
 
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
 }

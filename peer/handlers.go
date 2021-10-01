@@ -43,7 +43,7 @@ func (c *CoinServerHandler) latestBlock(r *http.Request) (*HTTPResponse, *HTTPEr
 	}
 }
 
-func (c *CoinServerHandler) transaction(r *http.Request) (*HTTPResponse, *HTTPError) {
+func (c *CoinServerHandler) receiveTransaction(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
 	case "POST":
 		tx := repository.Transaction{}
@@ -56,18 +56,38 @@ func (c *CoinServerHandler) transaction(r *http.Request) (*HTTPResponse, *HTTPEr
 			}
 		}
 
+		_, ok := repository.GetTxFromTxPool(tx.ID)
+		if ok {
+			utils.InfoLogger.Println(fmt.Sprintf("tx exists in txPool %s", tx))
+			return &HTTPResponse{
+				StatusCode: http.StatusNotModified,
+				Body:       tx,
+			}, nil
+		}
+		utils.ErrorLogger.Println(tx)
+
 		err = wallet.IsValidTransaction(tx)
 		if err != nil {
+			utils.ErrorLogger.Println(fmt.Sprintf("received tx is invalid. error: %s", err.Error()))
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
 				Message: err.Error(),
 			}
 		}
 
-		ok := c.BlockchainService.AddTxToTxPool(tx)
+		err = service.ValidateTxPoolDryRun(c.BlockchainService.Blockchain.GetLastBlock().Index, tx)
+		if err != nil {
+			utils.ErrorLogger.Println(fmt.Sprintf("txPool is invalid. error: %s", err.Error()))
+			return nil, &HTTPError{
+				Code:    http.StatusBadRequest,
+				Message: fmt.Sprintf("txPool is invalid. error: %s", err.Error()),
+			}
+		}
+
+		ok = c.BlockchainService.AddTxToTxPool(tx)
 		if ok {
-			utils.InfoLogger.Println("Received Tx added to pool. Relaying tx")
-			c.Client.BroadcastTransaction(tx)
+			utils.InfoLogger.Println("Received new Tx and added to pool. Relaying tx pool")
+			// c.Client.BroadcastTransaction(tx)
 		}
 
 		return &HTTPResponse{
@@ -81,7 +101,7 @@ func (c *CoinServerHandler) transaction(r *http.Request) (*HTTPResponse, *HTTPEr
 	}
 }
 
-func (c *CoinServerHandler) spendMoney(r *http.Request) (*HTTPResponse, *HTTPError) {
+func (c *CoinServerHandler) spendCoin(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
 	case "POST":
 		cc := CreateTransactionControl{}
@@ -94,7 +114,7 @@ func (c *CoinServerHandler) spendMoney(r *http.Request) (*HTTPResponse, *HTTPErr
 			}
 		}
 
-		transaction, err := c.BlockchainService.SpendMoney(cc.Address, cc.Amount)
+		tx, err := c.BlockchainService.CreateTx(cc.Address, cc.Amount)
 		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
@@ -102,15 +122,15 @@ func (c *CoinServerHandler) spendMoney(r *http.Request) (*HTTPResponse, *HTTPErr
 			}
 		}
 
-		tID := wallet.GenerateTransactionID(*transaction)
-		if !reflect.DeepEqual(tID, transaction.ID) {
+		tID := wallet.GenerateTransactionID(*tx)
+		if !reflect.DeepEqual(tID, tx.ID) {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
 				Message: "unequal tsek",
 			}
 		}
 
-		err = wallet.IsValidTransaction(*transaction)
+		err = wallet.IsValidTransaction(*tx)
 		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
@@ -118,7 +138,18 @@ func (c *CoinServerHandler) spendMoney(r *http.Request) (*HTTPResponse, *HTTPErr
 			}
 		}
 
-		err = c.Client.BroadcastTransaction(*transaction)
+		err = service.ValidateTxPoolDryRun(c.BlockchainService.Blockchain.GetLastBlock().Index, *tx)
+		if err != nil {
+			utils.ErrorLogger.Println(fmt.Sprintf("txPool is invalid. error: %s", err.Error()))
+			return nil, &HTTPError{
+				Code:    http.StatusBadRequest,
+				Message: fmt.Sprintf("txPool is invalid. error: %s", err.Error()),
+			}
+		}
+
+		repository.AddTxToTxPool(*tx)
+
+		err = c.Client.BroadcastTransaction(*tx)
 		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
@@ -128,7 +159,7 @@ func (c *CoinServerHandler) spendMoney(r *http.Request) (*HTTPResponse, *HTTPErr
 
 		return &HTTPResponse{
 			StatusCode: http.StatusCreated,
-			Body:       transaction,
+			Body:       tx,
 		}, nil
 
 	}
@@ -246,7 +277,7 @@ func (c *CoinServerHandler) addBlockToBlockchain(r *http.Request) (*HTTPResponse
 		if block.Index == c.BlockchainService.Blockchain.GetLastBlock().Index {
 			utils.InfoLogger.Println("Block already exists in blockchain")
 			return &HTTPResponse{
-				StatusCode: http.StatusNotModified,
+				StatusCode: http.StatusAlreadyReported,
 				Body:       c.BlockchainService.Blockchain,
 			}, nil
 		}

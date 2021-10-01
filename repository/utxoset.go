@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-var uTxOSet = UTxOSetType(make(map[PublicKeyAddressType]map[TxIDType]UTxO, 0))
+var uTxOSet = UTxOSetType(make(map[PublicKeyAddressType]map[TxIDType]UTxO))
 
 type PublicKeyAddressType string
 type TxIDType string
@@ -47,6 +47,14 @@ func GetUserLedger(publicKey []byte) userWalletType {
 }
 
 func AddTxOToReceiver(txId []byte, blockIndex int, txO TxO) {
+	AddTxOToReceiverSet(txId, blockIndex, txO, uTxOSet)
+}
+
+func AddTxOToReceiverCopy(txId []byte, blockIndex int, txO TxO, uTxOSetCopy UTxOSetType) {
+	AddTxOToReceiverSet(txId, blockIndex, txO, uTxOSetCopy)
+}
+
+func AddTxOToReceiverSet(txId []byte, blockIndex int, txO TxO, uTxOSet UTxOSetType) {
 	uTxO := UTxO{
 		ID: UTxOID{
 			Address: txO.Address,
@@ -66,10 +74,13 @@ func AddTxOToReceiver(txId []byte, blockIndex int, txO TxO) {
 	}
 
 	uTxOSet[PublicKeyAddressType(txO.Address)][TxIDType(txId)] = uTxO
-
 }
 
 func RemoveUTxOFromSender(txIn TxIn) {
+	RemoveUTxOFromSenderCopy(txIn, uTxOSet)
+}
+
+func RemoveUTxOFromSenderCopy(txIn TxIn, uTxOSet UTxOSetType) {
 	delete(uTxOSet[PublicKeyAddressType(txIn.UTxOID.Address)], TxIDType(txIn.UTxOID.TxID))
 }
 
@@ -78,15 +89,37 @@ func ClearUTxOSet() {
 }
 
 func (t TxIn) String() string {
-	return fmt.Sprintf("uTxOID: %s\nuTxOIndex: %+v\ntxOuts: %+v\n", t.UTxOID, t.UTxOIndex, Base64Encode(t.Signature))
+	return fmt.Sprintf("{\nuTxOID: %s\nuTxOIndex: %+v\nUtxOuts: %+v\n}\n", t.UTxOID, t.UTxOIndex, Base64Encode(t.Signature))
+}
+
+func (t TxO) String() string {
+	return fmt.Sprintf("{\nAddress: %s\nAmount: %+v\n}\n", Base64Encode(t.Address), t.Amount)
 }
 
 func (t UTxOID) String() string {
-	return fmt.Sprintf("Address: %s\nTxID: %+v\n", Base64Encode(t.Address), t.TxID)
+	return fmt.Sprintf("{\nAddress: %s\nTxID: %+v\n}\n", Base64Encode(t.Address), t.TxID)
+}
+
+func (t UTxO) String() string {
+	return fmt.Sprintf("{\nId: %s\nIndex: %+v\nAmount: %+v\n}\n", t.ID, t.Index, t.Amount)
 }
 
 func Base64Encode(message []byte) []byte {
 	b := make([]byte, base64.StdEncoding.EncodedLen(len(message)))
 	base64.StdEncoding.Encode(b, message)
 	return b
+}
+
+func CopyUTxOSet() UTxOSetType {
+	uTxOSetCopy := make(map[PublicKeyAddressType]map[TxIDType]UTxO)
+
+	for k, v := range uTxOSet {
+		id := make(map[TxIDType]UTxO)
+		for k1, v1 := range v {
+			id[k1] = v1
+		}
+		uTxOSetCopy[k] = id
+	}
+
+	return uTxOSetCopy
 }

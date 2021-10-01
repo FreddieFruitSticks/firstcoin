@@ -215,7 +215,7 @@ func (c *Client) BroadcastTransaction(tx repository.Transaction) error {
 			}
 
 			if resp.StatusCode >= 400 {
-				utils.ErrorLogger.Println(fmt.Sprintf("peer %s rejected transaction. error: %s", peer, err))
+				utils.ErrorLogger.Println(fmt.Sprintf("peer %s rejected transaction. error: %s", peer, readResponseBody(resp.Body)))
 			}
 
 		}

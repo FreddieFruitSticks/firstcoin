@@ -41,20 +41,41 @@ func (s *BlockchainService) CreateNextBlock() (*coin.Block, *coin.Blockchain, er
 	return &block, s.Blockchain, err
 }
 
-func (s *BlockchainService) SpendMoney(receiverAddress []byte, amount int) (*repository.Transaction, error) {
-	transaction, _, err := s.Wallet.CreateTransaction(receiverAddress, amount)
+func (s *BlockchainService) CreateTx(receiverAddress []byte, amount int) (*repository.Transaction, error) {
+	tx, _, err := s.Wallet.CreateTransaction(receiverAddress, amount)
 	if err != nil {
 		return nil, err
 	}
 
-	repository.AddTxToTxPool(*transaction)
+	return tx, nil
+}
 
-	return transaction, nil
+// Need to validate the entire pool for two reasons:
+// 1. Multiple individual transactions can be valid, while the entire pool is invalid. Eg, same spender spends all his money twice.
+// 2. When a new block is mined, and added to the chain, and uTxOs are updated, current txs might no longer be valid.
+func ValidateTxPoolDryRun(blockIndex int, newTx repository.Transaction) error {
+	txPoolArray := repository.GetTxPoolArray()
+	txPoolArray = append(txPoolArray, newTx)
+
+	uTxOSetCopy := repository.CopyUTxOSet()
+
+	for _, tx := range txPoolArray {
+		if err := wallet.IsValidTransactionCopy(tx, uTxOSetCopy); err != nil {
+			utils.ErrorLogger.Printf("error when validating txPool: %s\n", err)
+			return err
+		}
+
+		for _, txIn := range tx.TxIns {
+			repository.RemoveUTxOFromSenderCopy(txIn, uTxOSetCopy)
+		}
+		for _, txO := range tx.TxOuts {
+			repository.AddTxOToReceiverCopy(tx.ID, blockIndex, txO, uTxOSetCopy)
+		}
+	}
+	return nil
 }
 
 func CommitBlockTransactions(block coin.Block) {
-	// At this point assume each transaction is valid - checked previously
-
 	for _, tx := range block.Transactions {
 		for _, txIn := range tx.TxIns {
 			repository.RemoveUTxOFromSender(txIn)
@@ -66,7 +87,6 @@ func CommitBlockTransactions(block coin.Block) {
 
 	// TODO: Just for now - need to only remove the txs that are in the block
 	repository.EmptyTxPool()
-
 }
 
 func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockchain) (coin.Blockchain, repository.Transaction) {
@@ -84,10 +104,6 @@ func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockch
 }
 
 func (s *BlockchainService) AddTxToTxPool(tx repository.Transaction) bool {
-	tx, ok := repository.GetTxFromTxPool(tx.ID)
-	if ok {
-		return false
-	}
 
 	repository.AddTxToTxPool(tx)
 

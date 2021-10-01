@@ -156,35 +156,39 @@ func AreValidTransactions(transactions []repository.Transaction, blockIndex int)
 	return nil
 }
 
-func IsValidTransaction(transaction repository.Transaction) error {
-	if len(transaction.TxIns) < 1 {
-		return fmt.Errorf("Invalid transaction: txIns length must be > 0")
+func IsValidTransaction(tx repository.Transaction) error {
+	return IsValidTransactionCopy(tx, repository.GetEntireUTxOSet())
+}
+
+func IsValidTransactionCopy(tx repository.Transaction, uTxOSet repository.UTxOSetType) error {
+	if len(tx.TxIns) < 1 {
+		return fmt.Errorf("Invalid transaction: txIns length must be greater than 0")
 	}
 
-	if err := AreValidTxIns(transaction.TxIns); err != nil {
+	if err := AreValidTxIns(tx.TxIns, uTxOSet); err != nil {
 		return fmt.Errorf("Invalid transaction, invalid txIn %+v", err)
 	}
 
-	if len(transaction.TxOuts) < 1 {
-		return fmt.Errorf("Invalid transaction: txOuts length must be > 0")
+	if len(tx.TxOuts) < 1 {
+		return fmt.Errorf("Invalid transaction: txOuts length must be greater than 0")
 	}
 
-	if err := AreValidTxOuts(transaction.TxOuts); err != nil {
+	if err := AreValidTxOuts(tx.TxOuts); err != nil {
 		return fmt.Errorf("Invalid transaction, invalid txOut %+v", err)
 	}
 
-	tID := GenerateTransactionID(transaction)
-	if !reflect.DeepEqual(tID, transaction.ID) {
-		return fmt.Errorf("Invalid transaction id: %s. generate: %s", transaction.ID, tID)
+	tID := GenerateTransactionID(tx)
+	if !reflect.DeepEqual(tID, tx.ID) {
+		return fmt.Errorf("Invalid transaction id: %s. generate: %s", tx.ID, tID)
 	}
 
-	for _, txIn := range transaction.TxIns {
-		if err := VerifySignature(txIn.Signature, txIn.UTxOID.Address, transaction.ID); err != nil {
+	for _, txIn := range tx.TxIns {
+		if err := VerifySignature(txIn.Signature, txIn.UTxOID.Address, tx.ID); err != nil {
 			return fmt.Errorf("Invalid transaction - signature verification failed: %+v", err.Error())
 
 		}
 	}
-	if err := VerifyTransactionAmount(transaction); err != nil {
+	if err := VerifyTransactionAmountCopy(tx, uTxOSet); err != nil {
 		return fmt.Errorf("Invalid transaction - amount verification failed: %+v", err.Error())
 	}
 
@@ -217,18 +221,22 @@ func IsValidCoinbaseTransaction(transaction repository.Transaction, blockIndex i
 }
 
 func VerifyTransactionAmount(tx repository.Transaction) error {
+	return VerifyTransactionAmountCopy(tx, repository.GetEntireUTxOSet())
+}
+
+func VerifyTransactionAmountCopy(tx repository.Transaction, uTxOSet repository.UTxOSetType) error {
 	totalAmountFromUTxOs := 0
 
 	for _, txIn := range tx.TxIns {
 		uTxOId := txIn.UTxOID
 
-		spenderLedger := repository.GetUserLedger(uTxOId.Address)
+		spenderLedger := uTxOSet[repository.PublicKeyAddressType(uTxOId.Address)]
+
 		if len(spenderLedger) == 0 {
 			return fmt.Errorf("spender does not exist in public ledger")
 		}
 
 		spenderUTxO := spenderLedger[repository.TxIDType(uTxOId.TxID)]
-
 		if err := IsValidUTxOStructure(spenderUTxO); err != nil {
 			return err
 		}
@@ -244,7 +252,7 @@ func VerifyTransactionAmount(tx repository.Transaction) error {
 
 func IsValidUTxOStructure(uTxO repository.UTxO) error {
 	if uTxO.Amount <= 0 {
-		return fmt.Errorf("spender must spend more than 0 coins")
+		return fmt.Errorf("spender must reference a uTxO with more than 0 coins")
 	}
 
 	if len(uTxO.ID.Address) == 0 {
@@ -262,7 +270,23 @@ func IsValidUTxOStructure(uTxO repository.UTxO) error {
 	return nil
 }
 
-func IsValidTxInStructure(txIn repository.TxIn) error {
+func IsValidTxIn(txIn repository.TxIn, uTxOSet repository.UTxOSetType) error {
+	fmt.Println("!!!!!!!!!!!!!!!!!!!")
+	fmt.Println(uTxOSet)
+	spenderLedger, ok := uTxOSet[repository.PublicKeyAddressType(txIn.UTxOID.Address)]
+	if !ok {
+		return fmt.Errorf("invalid txIn. spender ledger does not exist")
+	}
+	fmt.Println("****************")
+	fmt.Println(spenderLedger)
+
+	u, ok := spenderLedger[repository.TxIDType(txIn.UTxOID.TxID)]
+	fmt.Println("-------------")
+	fmt.Println(u)
+	if !ok {
+		return fmt.Errorf("invalid txIn. spender uTxO does not exist")
+	}
+
 	if len(txIn.UTxOID.Address) == 0 {
 		return fmt.Errorf("txIn UTxO address cannot be empty")
 	}
@@ -278,9 +302,9 @@ func IsValidTxInStructure(txIn repository.TxIn) error {
 	return nil
 }
 
-func AreValidTxIns(txIns []repository.TxIn) error {
+func AreValidTxIns(txIns []repository.TxIn, uTxOSet repository.UTxOSetType) error {
 	for index, txIn := range txIns {
-		if err := IsValidTxInStructure(txIn); err != nil {
+		if err := IsValidTxIn(txIn, uTxOSet); err != nil {
 			return fmt.Errorf("error in txIn number %d. error: %+v", index, err)
 		}
 	}
