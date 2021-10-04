@@ -52,17 +52,26 @@ func (s *BlockchainService) CreateTx(receiverAddress []byte, amount int) (*repos
 
 // Need to validate the entire pool for two reasons:
 // 1. Multiple individual transactions can be valid, while the entire pool is invalid. Eg, same spender spends all his money twice.
-// 2. When a new block is mined, and added to the chain, and uTxOs are updated, current txs might no longer be valid.
-func ValidateTxPoolDryRun(blockIndex int, newTx repository.Transaction) error {
+// 2. When a new block is mined, and added to the chain, and uTxOs are updated, current txs might no longer be valid (e.g. the UtxO was used).
+
+//Note: Say there is a pair of txs that are invalid together, this will register the SECOND tx as the invalid one and keep the first.
+func ValidateTxPoolDryRun(blockIndex int, newTx *repository.Transaction) ([][]byte, error) {
+	invalidTxIDs := make([][]byte, 0)
+	var err error
+
 	txPoolArray := repository.GetTxPoolArray()
-	txPoolArray = append(txPoolArray, newTx)
+
+	if newTx != nil {
+		txPoolArray = append(txPoolArray, *newTx)
+	}
 
 	uTxOSetCopy := repository.CopyUTxOSet()
 
 	for _, tx := range txPoolArray {
-		if err := wallet.IsValidTransactionCopy(tx, uTxOSetCopy); err != nil {
+		if err = wallet.IsValidTransactionCopy(tx, uTxOSetCopy); err != nil {
 			utils.ErrorLogger.Printf("error when validating txPool: %s\n", err)
-			return err
+			invalidTxIDs = append(invalidTxIDs, tx.ID)
+			continue
 		}
 
 		for _, txIn := range tx.TxIns {
@@ -72,9 +81,12 @@ func ValidateTxPoolDryRun(blockIndex int, newTx repository.Transaction) error {
 			repository.AddTxOToReceiverCopy(tx.ID, blockIndex, txO, uTxOSetCopy)
 		}
 	}
-	return nil
+
+	return invalidTxIDs, err
 }
 
+// commit all block txs. Remove txs from current tx pool that exist in the block.
+// Then further validate if the rest of the entire tx pool is valid and remove the txs that are invalid.
 func CommitBlockTransactions(block coin.Block) {
 	for _, tx := range block.Transactions {
 		for _, txIn := range tx.TxIns {
@@ -83,10 +95,15 @@ func CommitBlockTransactions(block coin.Block) {
 		for _, txO := range tx.TxOuts {
 			repository.AddTxOToReceiver(tx.ID, block.Index, txO)
 		}
+		repository.RemoveTxFromTxPool(tx.ID)
 	}
 
-	// TODO: Just for now - need to only remove the txs that are in the block
-	repository.EmptyTxPool()
+	if invalidTxIDs, err := ValidateTxPoolDryRun(block.Index, nil); err != nil {
+		utils.InfoLogger.Println("Left over Tx pool is invalid after committing block. Emptying tx pool")
+		for _, invalidTxID := range invalidTxIDs {
+			repository.RemoveTxFromTxPool(invalidTxID)
+		}
+	}
 }
 
 func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockchain) (coin.Blockchain, repository.Transaction) {

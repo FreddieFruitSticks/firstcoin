@@ -44,9 +44,9 @@ func SetTxPool(txPool map[TxIDType]Transaction) {
 	unconfirmedTransactionPool = txPool
 }
 
-// func IsValidTxPool() error {
-
-// }
+func RemoveTxFromTxPool(txId []byte) {
+	delete(unconfirmedTransactionPool, TxIDType(txId))
+}
 
 func EmptyTxPool() {
 	unconfirmedTransactionPool = make(map[TxIDType]Transaction, 0)

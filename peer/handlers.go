@@ -74,7 +74,7 @@ func (c *CoinServerHandler) receiveTransaction(r *http.Request) (*HTTPResponse, 
 			}
 		}
 
-		err = service.ValidateTxPoolDryRun(c.BlockchainService.Blockchain.GetLastBlock().Index, tx)
+		_, err = service.ValidateTxPoolDryRun(c.BlockchainService.Blockchain.GetLastBlock().Index, &tx)
 		if err != nil {
 			utils.ErrorLogger.Println(fmt.Sprintf("txPool is invalid. error: %s", err.Error()))
 			return nil, &HTTPError{
@@ -137,7 +137,7 @@ func (c *CoinServerHandler) spendCoin(r *http.Request) (*HTTPResponse, *HTTPErro
 			}
 		}
 
-		err = service.ValidateTxPoolDryRun(c.BlockchainService.Blockchain.GetLastBlock().Index, *tx)
+		_, err = service.ValidateTxPoolDryRun(c.BlockchainService.Blockchain.GetLastBlock().Index, tx)
 		if err != nil {
 			utils.ErrorLogger.Println(fmt.Sprintf("txPool is invalid. error: %s", err.Error()))
 			return nil, &HTTPError{

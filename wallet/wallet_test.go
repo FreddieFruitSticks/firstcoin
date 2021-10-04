@@ -428,7 +428,7 @@ func TestFindUTxOs(test *testing.T) {
 			t.Fatalf("expected to find err")
 		}
 
-		if err != nil && err.Error() != "insufficient funds" {
+		if err != nil && err.Error() != "insufficient funds or no available uTxOs" {
 			t.Fatalf("incorrect error type, expected insufficient funds, got: %+v", err)
 		}
 
