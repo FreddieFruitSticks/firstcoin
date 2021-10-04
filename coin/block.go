@@ -22,9 +22,10 @@ type Block struct {
 	Hash            []byte                   `json:"hash"`
 }
 
-// TODO: loop over transaction hashes rather, maybe?
 func calculateBlockHash(index int, previousHash []byte, timestamp int, transactions []repository.Transaction, difficultyLevel int) []byte {
 	msgHash := sha256.New()
+
+	// TODO: Does POW hash calculation contain transactions??
 	concatenatedTransactionIDs := concatTransactionIDs(transactions)
 	_, err := msgHash.Write([]byte(fmt.Sprintf("%d%s%d%s%d", index, string(previousHash), timestamp, concatenatedTransactionIDs, difficultyLevel)))
 	utils.CheckError(err)
@@ -94,7 +95,8 @@ func (b *Block) IsValidBlock(previousBlock Block) error {
 		return fmt.Errorf("Invalid block: %s. error: %s", "invalid transactions", err.Error())
 	}
 
-	// validate that the current block's timestamp isnt more than 10s in the future
+	// validate that the current block's timestamp isnt more than 10s in the future - we allow a certain error in time registration
+	// need to be careful with this value and time to mine a block
 	if (int(time.Now().UnixNano()) - b.Timestamp) > 10*NANO_SECONDS {
 		return fmt.Errorf("Invalid block: %s", "invalid block timestamp")
 	}
