@@ -216,6 +216,65 @@ func (c *CoinServerHandler) getBlockchain(r *http.Request) (*HTTPResponse, *HTTP
 	}
 }
 
+func convertHostnamesToArray(hosts map[string]string) []string {
+	hostnames := make([]string, 0)
+
+	for k := range hosts {
+		hostnames = append(hostnames, k)
+	}
+
+	return hostnames
+}
+
+func (c *CoinServerHandler) getHosts(r *http.Request) (*HTTPResponse, *HTTPError) {
+	hostnames := convertHostnamesToArray(c.Peers.Hostnames)
+	switch r.Method {
+	case "GET":
+		return &HTTPResponse{
+			StatusCode: http.StatusOK,
+			Body:       hostnames,
+		}, nil
+
+	}
+
+	return nil, &HTTPError{
+		Code: http.StatusMethodNotAllowed,
+	}
+}
+
+// This gets this host's publicKey, and total amount.
+func (c *CoinServerHandler) getHostDetails(r *http.Request) (*HTTPResponse, *HTTPError) {
+	publicKey := c.BlockchainService.Wallet.Crypt.PublicKey
+	userLedger := repository.GetUserLedger(publicKey)
+
+	totalAmount := 0
+
+	for _, v := range userLedger {
+		totalAmount += v.Amount
+	}
+
+	switch r.Method {
+	case "GET":
+		return &HTTPResponse{
+			StatusCode: http.StatusOK,
+			Body: Details{
+				PublicKey:   publicKey,
+				TotalAmount: totalAmount,
+			},
+		}, nil
+
+	}
+
+	return nil, &HTTPError{
+		Code: http.StatusMethodNotAllowed,
+	}
+}
+
+type Details struct {
+	PublicKey   []byte `json:"publicKey"`
+	TotalAmount int    `json:"totalAmount"`
+}
+
 func (c *CoinServerHandler) peers(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
 	case "POST":

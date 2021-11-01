@@ -24,11 +24,13 @@ func (s *Server) HandleServer(port string) {
 		fmt.Fprintf(w, "pong from, %q", html.EscapeString(r.URL.Path))
 	})
 
-	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock)) // control endpoint
-	http.HandleFunc("/spend-coin", JSONHandler(s.CoinServerHandler.spendCoin))     // control endpoint
-	http.HandleFunc("/txpool", JSONHandler(s.CoinServerHandler.getTxPool))         // control endpoint
-	http.HandleFunc("/txset", JSONHandler(s.CoinServerHandler.getTxSet))           // control endpoint
-	http.HandleFunc("/blockchain", JSONHandler(s.CoinServerHandler.getBlockchain)) // control endpoint
+	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock))    // control endpoint
+	http.HandleFunc("/spend-coin", JSONHandler(s.CoinServerHandler.spendCoin))        // control endpoint
+	http.HandleFunc("/txpool", JSONHandler(s.CoinServerHandler.getTxPool))            // control endpoint
+	http.HandleFunc("/txset", JSONHandler(s.CoinServerHandler.getTxSet))              // control endpoint
+	http.HandleFunc("/blockchain", JSONHandler(s.CoinServerHandler.getBlockchain))    // control endpoint
+	http.HandleFunc("/hosts", JSONHandler(s.CoinServerHandler.getHosts))              // control endpoint
+	http.HandleFunc("/host-details", JSONHandler(s.CoinServerHandler.getHostDetails)) // control endpoint
 
 	http.HandleFunc("/block", JSONHandler(s.CoinServerHandler.addBlockToBlockchain))
 	http.HandleFunc("/block-chain", JSONHandler(s.CoinServerHandler.blockChain))
@@ -42,11 +44,11 @@ func (s *Server) HandleServer(port string) {
 
 type ServiceHandler func(*http.Request) (*HTTPResponse, *HTTPError)
 
-func JSONHandler(service ServiceHandler) http.HandlerFunc {
+func JSONHandler(handler ServiceHandler) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		httpResponse, err := service(request)
+		writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
 
-		writer.Header().Set("X-Content-Type-Options", "nosniff")
+		httpResponse, err := handler(request)
 		writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 		if err != nil {
@@ -63,10 +65,6 @@ func JSONHandler(service ServiceHandler) http.HandlerFunc {
 			return
 		}
 
-		for key, value := range httpResponse.Headers {
-			writer.Header().Set(key, value)
-		}
-
 		writer.WriteHeader(httpResponse.StatusCode)
 		encodeErr := json.NewEncoder(writer).Encode(httpResponse.Body)
 		if encodeErr != nil {
@@ -78,7 +76,6 @@ func JSONHandler(service ServiceHandler) http.HandlerFunc {
 type HTTPResponse struct {
 	StatusCode int
 	Body       interface{}
-	Headers    map[string]string
 }
 
 type HTTPError struct {
@@ -90,7 +87,6 @@ func (httpError *HTTPError) Error() string {
 	return httpError.Message
 }
 
-// nolint: unused
 func (httpError *HTTPError) ErrorCode() int {
 	return httpError.Code
 }

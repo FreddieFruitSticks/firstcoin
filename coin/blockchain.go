@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	BLOCK_GENERATION_INTERVAL      = 10         //seconds
+	BLOCK_GENERATION_INTERVAL      = 20         //seconds
 	DIFFICULTY_ADJUSTMENT_INTERVAL = 10         //seconds
 	NANO_SECONDS                   = 1000000000 //number of nanoseconds in 1 second
 )
@@ -36,8 +36,8 @@ func (b *Blockchain) SetBlockchain(blocks []Block) {
 
 func (b *Blockchain) GenerateNextBlock(transactionPool *[]repository.Transaction) Block {
 	previousBlock := b.GetLastBlock()
-	now := int(time.Now().UnixNano())
 	currentDifficultyLevel := b.getDifficultyLevel()
+	now := int(time.Now().UnixNano())
 	hash := calculateBlockHash(previousBlock.Index+1, previousBlock.Hash, now, *transactionPool, currentDifficultyLevel)
 	nonce := ProofOfWork(hash, currentDifficultyLevel)
 

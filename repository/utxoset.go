@@ -14,8 +14,8 @@ type userWalletType map[TxIDType]UTxO
 
 // to reference the UTxO we need the address and txID because the UTxO set is a map of maps
 type UTxOID struct {
-	Address []byte
-	TxID    []byte
+	Address []byte `json:"Address"`
+	TxID    []byte `json:"TxID"`
 }
 
 // transcation input refers to the giver of coins. Signature is signed with giver's private key
@@ -27,8 +27,8 @@ type TxIn struct {
 
 // transaction ouput refers to the receiver of coins. Address is receiver's public key
 type TxO struct {
-	Address []byte
-	Amount  int
+	Address []byte `json:"Address"`
+	Amount  int    `json:"Amount"`
 }
 
 // unspend transaction outputs are the final transaction outs allocated to each receiver - it's ID is the ID of the transaction that created it

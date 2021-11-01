@@ -16,7 +16,7 @@ type Block struct {
 	Index           int                      `json:"index"`
 	PreviousHash    []byte                   `json:"previousHash"`
 	Transactions    []repository.Transaction `json:"transactions"`
-	Timestamp       int                      `json:"timeStamp"`
+	Timestamp       int                      `json:"timestamp"`
 	DifficultyLevel int                      `json:"difficultyLevel"`
 	Nonce           int                      `json:"nonce"`
 	Hash            []byte                   `json:"hash"`
@@ -97,7 +97,7 @@ func (b *Block) IsValidBlock(previousBlock Block) error {
 
 	// validate that the current block's timestamp isnt more than 10s in the future - we allow a certain error in time registration
 	// need to be careful with this value and time to mine a block
-	if (int(time.Now().UnixNano()) - b.Timestamp) > 10*NANO_SECONDS {
+	if b.Timestamp > int(time.Now().UnixNano())+10*NANO_SECONDS {
 		return fmt.Errorf("Invalid block: %s", "invalid block timestamp")
 	}
 
