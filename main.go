@@ -46,6 +46,7 @@ func main() {
 		client = peer.NewClient(peers, blockchain, thisPeer)
 
 		p := client.GetPeers()
+
 		err := client.QueryPeersForBlockchain(p)
 		if err != nil {
 			fmt.Println(err)

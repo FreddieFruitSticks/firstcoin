@@ -51,7 +51,6 @@ func (c *Client) BroadcastBlock(block coin.Block) coin.Block {
 	return block
 }
 
-// Fetch from seed host for now
 func (c *Client) getBlockchain(address string) (*coin.Blockchain, error) {
 	resp, err := http.Get(fmt.Sprintf("http://%s/block-chain", address))
 	if err != nil {
@@ -66,15 +65,14 @@ func (c *Client) getBlockchain(address string) (*coin.Blockchain, error) {
 		return nil, err
 	}
 
-	if err := bc.IsValidBlockchain(); err != nil {
-		c.Blockchain = nil
-		return nil, fmt.Errorf("invalid blockchain. error: %s", err.Error())
-	}
+	// if err := bc.IsValidBlockchain(); err != nil {
+	// 	c.Blockchain = nil
+	// 	return nil, fmt.Errorf("invalid blockchain. error: %s", err.Error())
+	// }
 
 	return &bc, nil
 }
 
-// Fetch latest block from seed host for now
 func (c *Client) GetLatestBlockFromPeer(peer string) (*coin.Block, error) {
 	resp, err := http.Get(fmt.Sprintf("http://%s/latest-block", peer))
 	if err != nil {
@@ -120,6 +118,7 @@ func (c *Client) GetPeers() map[string]string {
 	utils.CheckError(err)
 
 	c.Peers.Hostnames = peers
+	// delete(c.GetPeers(), c.ThisPeer)
 
 	return peers
 }
@@ -127,11 +126,14 @@ func (c *Client) GetPeers() map[string]string {
 // TODO: This will not work - cant simply take the longest chain - malice could have one block longer - should take the one that is 2 or 3 blocks longer
 func (c *Client) QueryPeersForBlockchain(peers map[string]string) error {
 	for address, _ := range peers {
+		if address == c.ThisPeer {
+			continue
+		}
+
 		block, err := c.GetLatestBlockFromPeer(address)
 		if err != nil {
 			return err
 		}
-
 		if len(c.Blockchain.Blocks) == 0 {
 			bc, err := c.getBlockchain(address)
 			if err != nil {
@@ -140,11 +142,11 @@ func (c *Client) QueryPeersForBlockchain(peers map[string]string) error {
 
 			forkChain := coin.NewBlockchain(bc.Blocks)
 
-			if err := bc.IsValidBlockchain(); err == nil {
-				c.Blockchain.ReplaceBlockchain(*forkChain)
-			} else {
-				return err
-			}
+			c.Blockchain.ReplaceBlockchain(*forkChain)
+			// if err := bc.IsValidBlockchain(); err == nil {
+			// } else {
+			// 	return err
+			// }
 
 		}
 
@@ -161,7 +163,10 @@ func (c *Client) QueryPeersForBlockchain(peers map[string]string) error {
 		}
 	}
 
-	replayBlockChainTransactions(*c.Blockchain)
+	err := replayBlockChainTransactions(*c.Blockchain)
+	if err != nil {
+		repository.ClearUTxOSet()
+	}
 
 	return nil
 }
@@ -230,8 +235,22 @@ func readResponseBody(body io.ReadCloser) string {
 	return buf.String()
 }
 
-func replayBlockChainTransactions(bc coin.Blockchain) {
-	for _, block := range bc.Blocks {
-		service.CommitBlockTransactions(block)
+func replayBlockChainTransactions(bc coin.Blockchain) error {
+	if err := bc.Blocks[0].IsGenesisBlock(); err != nil {
+		return fmt.Errorf("Invalid blockchain: %s. error: %s", "invalid genesis block", err.Error())
 	}
+
+	err := service.CommitBlockTransactions(bc.Blocks[0])
+	if err != nil {
+		return err
+	}
+
+	for _, block := range bc.Blocks[1:] {
+		err := service.CommitBlockTransactions(block)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

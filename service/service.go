@@ -87,7 +87,10 @@ func ValidateTxPoolDryRun(blockIndex int, newTx *repository.Transaction) ([][]by
 
 // commit all block txs. Remove txs from current tx pool that exist in the block.
 // Then further validate if the rest of the entire tx pool is valid and remove the txs that are invalid.
-func CommitBlockTransactions(block coin.Block) {
+func CommitBlockTransactions(block coin.Block) error {
+	if err := wallet.AreValidTransactions(block.Transactions, block.Index); err != nil {
+		return err
+	}
 	for _, tx := range block.Transactions {
 		for _, txIn := range tx.TxIns {
 			repository.RemoveUTxOFromSender(txIn)
@@ -104,6 +107,8 @@ func CommitBlockTransactions(block coin.Block) {
 			repository.RemoveTxFromTxPool(invalidTxID)
 		}
 	}
+
+	return nil
 }
 
 func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockchain) (coin.Blockchain, repository.Transaction) {

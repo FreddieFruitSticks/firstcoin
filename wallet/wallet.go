@@ -166,7 +166,7 @@ func IsValidTransactionCopy(tx repository.Transaction, uTxOSet repository.UTxOSe
 	}
 
 	if err := AreValidTxIns(tx.TxIns, uTxOSet); err != nil {
-		return fmt.Errorf("Invalid transaction, invalid txIn %+v", err)
+		return fmt.Errorf("invalid txIn %+v", err)
 	}
 
 	if len(tx.TxOuts) < 1 {
