@@ -232,6 +232,7 @@ func (c *Client) BroadcastTransaction(tx repository.Transaction) error {
 func readResponseBody(body io.ReadCloser) string {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(body)
+
 	return buf.String()
 }
 
