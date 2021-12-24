@@ -74,7 +74,7 @@ func (c *CoinServerHandler) receiveTransaction(r *http.Request) (*HTTPResponse, 
 			}
 		}
 
-		_, err = service.ValidateTxPoolDryRun(c.BlockchainService.Blockchain.GetLastBlock().Index, &tx)
+		_, err = service.ValidateTxPoolDryRun(&tx)
 		if err != nil {
 			utils.ErrorLogger.Println(fmt.Sprintf("txPool is invalid. error: %s", err.Error()))
 			return nil, &HTTPError{
@@ -100,7 +100,7 @@ func (c *CoinServerHandler) receiveTransaction(r *http.Request) (*HTTPResponse, 
 	}
 }
 
-func (c *CoinServerHandler) spendCoin(r *http.Request) (*HTTPResponse, *HTTPError) {
+func (c *CoinServerHandler) createTransaction(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
 	case "POST":
 		cc := CreateTransactionControl{}
@@ -137,7 +137,7 @@ func (c *CoinServerHandler) spendCoin(r *http.Request) (*HTTPResponse, *HTTPErro
 			}
 		}
 
-		_, err = service.ValidateTxPoolDryRun(c.BlockchainService.Blockchain.GetLastBlock().Index, tx)
+		_, err = service.ValidateTxPoolDryRun(tx)
 		if err != nil {
 			utils.ErrorLogger.Println(fmt.Sprintf("txPool is invalid. error: %s", err.Error()))
 			return nil, &HTTPError{
@@ -245,13 +245,8 @@ func (c *CoinServerHandler) getHosts(r *http.Request) (*HTTPResponse, *HTTPError
 // This gets this host's publicKey, and total amount.
 func (c *CoinServerHandler) getHostDetails(r *http.Request) (*HTTPResponse, *HTTPError) {
 	publicKey := c.BlockchainService.Wallet.Crypt.PublicKey
-	userLedger := repository.GetUserLedger(publicKey)
 
-	totalAmount := 0
-
-	for _, v := range userLedger {
-		totalAmount += v.Amount
-	}
+	totalAmount := wallet.GetTotalAmount(publicKey)
 
 	switch r.Method {
 	case "GET":
@@ -320,7 +315,7 @@ func (c *CoinServerHandler) blockChain(r *http.Request) (*HTTPResponse, *HTTPErr
 	}
 }
 
-func (c *CoinServerHandler) addBlockToBlockchain(r *http.Request) (*HTTPResponse, *HTTPError) {
+func (c *CoinServerHandler) mineBlock(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
 	case "POST":
 		block := coin.Block{}
@@ -351,7 +346,18 @@ func (c *CoinServerHandler) addBlockToBlockchain(r *http.Request) (*HTTPResponse
 		// TODO: This needs to be added to a fork (need to implement forks first). It is not a given that the block should be accepted
 		//just because it has valid POW, and "fits" on to the chain.
 		c.BlockchainService.Blockchain.AddBlock(block)
-		service.CommitBlockTransactions(block)
+
+		// we copy the block to avoid any pointer copying falils, such as slice pointers. Updating the slice of TxOs in UTxOSet,
+		// updated the slice in the blockchain
+		copyBlock, err := copyBlock(block)
+		if err != nil {
+			return nil, &HTTPError{
+				Code:    http.StatusInternalServerError,
+				Message: fmt.Sprintf("Could not update blockchain. error: %s", err.Error()),
+			}
+		}
+
+		service.CommitBlockTransactions(copyBlock)
 
 		// this is relaying an accepted block to the network. Right now it simply sends to all the peers. The node that originally sent
 		// the block only adds it block to its own chain if it receives it back from the network.
@@ -390,8 +396,8 @@ func (c *CoinServerHandler) createBlock(r *http.Request) (*HTTPResponse, *HTTPEr
 		c.Client.BroadcastBlock(*block)
 
 		payload := struct {
-			Blocks              []coin.Block                                                                `json:"blocks"`
-			UnspentTransactions map[repository.PublicKeyAddressType]map[repository.TxIDType]repository.UTxO `json:"unspentTransactions"`
+			Blocks              []coin.Block                                   `json:"blocks"`
+			UnspentTransactions map[repository.TxIDType]repository.Transaction `json:"unspentTransactions"`
 		}{
 			Blocks:              blockchain.Blocks,
 			UnspentTransactions: repository.GetEntireUTxOSet(),
@@ -433,4 +439,16 @@ type HostName struct {
 type CreateTransactionControl struct {
 	Address []byte `json:"address"`
 	Amount  int    `json:"amount"`
+}
+
+func copyBlock(bl coin.Block) (coin.Block, error) {
+	copyBlock := coin.Block{}
+
+	bytes, err := json.Marshal(bl)
+	if err != nil {
+		return coin.Block{}, err
+	}
+
+	json.Unmarshal(bytes, &copyBlock)
+	return copyBlock, nil
 }

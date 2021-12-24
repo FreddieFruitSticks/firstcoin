@@ -35,14 +35,15 @@ func (c *Client) BroadcastBlock(block coin.Block) coin.Block {
 		if peer != c.ThisPeer {
 			body := bytes.NewReader(j)
 			resp, err := http.Post(fmt.Sprintf("http://%s/block", peer), "application/json", body)
-			if resp.StatusCode >= 400 {
-				utils.ErrorLogger.Println(fmt.Sprintf("error from peer when broadcasting block %s", readResponseBody(resp.Body)))
-			}
 			if err != nil {
 				utils.ErrorLogger.Println(fmt.Sprintf("error when posting block %s", err))
 
 				// Remove host if error for now
 				c.Peers.RemoveHostname(peer)
+				continue
+			}
+			if resp.StatusCode >= 400 {
+				utils.ErrorLogger.Println(fmt.Sprintf("error from peer when broadcasting block %s", readResponseBody(resp.Body)))
 			}
 
 		}
@@ -165,6 +166,7 @@ func (c *Client) QueryPeersForBlockchain(peers map[string]string) error {
 
 	err := replayBlockChainTransactions(*c.Blockchain)
 	if err != nil {
+		utils.ErrorLogger.Println(err)
 		repository.ClearUTxOSet()
 	}
 

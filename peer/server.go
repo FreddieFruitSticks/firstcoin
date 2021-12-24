@@ -24,15 +24,15 @@ func (s *Server) HandleServer(port string) {
 		fmt.Fprintf(w, "pong from, %q", html.EscapeString(r.URL.Path))
 	})
 
-	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock))    // control endpoint
-	http.HandleFunc("/spend-coin", JSONHandler(s.CoinServerHandler.spendCoin))        // control endpoint
-	http.HandleFunc("/txpool", JSONHandler(s.CoinServerHandler.getTxPool))            // control endpoint
-	http.HandleFunc("/txset", JSONHandler(s.CoinServerHandler.getTxSet))              // control endpoint
-	http.HandleFunc("/blockchain", JSONHandler(s.CoinServerHandler.getBlockchain))    // control endpoint
-	http.HandleFunc("/hosts", JSONHandler(s.CoinServerHandler.getHosts))              // control endpoint
-	http.HandleFunc("/host-details", JSONHandler(s.CoinServerHandler.getHostDetails)) // control endpoint
+	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock))     // control endpoint
+	http.HandleFunc("/spend-coin", JSONHandler(s.CoinServerHandler.createTransaction)) // control endpoint
+	http.HandleFunc("/txpool", JSONHandler(s.CoinServerHandler.getTxPool))             // control endpoint
+	http.HandleFunc("/txset", JSONHandler(s.CoinServerHandler.getTxSet))               // control endpoint
+	http.HandleFunc("/blockchain", JSONHandler(s.CoinServerHandler.getBlockchain))     // control endpoint
+	http.HandleFunc("/hosts", JSONHandler(s.CoinServerHandler.getHosts))               // control endpoint
+	http.HandleFunc("/host-details", JSONHandler(s.CoinServerHandler.getHostDetails))  // control endpoint
 
-	http.HandleFunc("/block", JSONHandler(s.CoinServerHandler.addBlockToBlockchain))
+	http.HandleFunc("/block", JSONHandler(s.CoinServerHandler.mineBlock))
 	http.HandleFunc("/block-chain", JSONHandler(s.CoinServerHandler.blockChain))
 	http.HandleFunc("/peers", JSONHandler(s.CoinServerHandler.peers))
 	http.HandleFunc("/notify", JSONHandler(s.CoinServerHandler.peers))

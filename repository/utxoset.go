@@ -2,106 +2,99 @@ package repository
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"reflect"
 )
 
-var uTxOSet = UTxOSetType(make(map[PublicKeyAddressType]map[TxIDType]UTxO))
+var uTxOSet = UTxOSetType(make(map[TxIDType]Transaction))
 
-type PublicKeyAddressType string
 type TxIDType string
-type UTxOSetType map[PublicKeyAddressType]map[TxIDType]UTxO
-type userWalletType map[TxIDType]UTxO
-
-// to reference the UTxO we need the address and txID because the UTxO set is a map of maps
-type UTxOID struct {
-	Address []byte `json:"Address"`
-	TxID    []byte `json:"TxID"`
-}
+type UTxOSetType map[TxIDType]Transaction
+type UserWalletType map[TxIDType]Transaction // wallet is basically the subset of UTxOSet that concerns the user
 
 // transcation input refers to the giver of coins. Signature is signed with giver's private key
 type TxIn struct {
-	UTxOID    UTxOID
-	UTxOIndex int // index is the block number or block height - this is to prevent duplicate signatures for exact same txs
-	Signature []byte
+	TxID            []byte `json:"txid"`
+	TxOIndex        int    `json:"vout"`
+	ScriptSignature []byte `json:"scriptSig"`
 }
 
 // transaction ouput refers to the receiver of coins. Address is receiver's public key
 type TxO struct {
-	Address []byte `json:"Address"`
-	Amount  int    `json:"Amount"`
-}
-
-// unspend transaction outputs are the final transaction outs allocated to each receiver - it's ID is the ID of the transaction that created it
-type UTxO struct {
-	ID     UTxOID //ID is unique because of timestamp
-	Index  int
-	Amount int
+	ScriptPubKey []byte `json:"scriptPubKey"`
+	Value        int    `json:"value"`
 }
 
 func GetEntireUTxOSet() UTxOSetType {
 	return uTxOSet
 }
 
-func GetUserLedger(publicKey []byte) userWalletType {
-	return uTxOSet[PublicKeyAddressType(publicKey)]
-}
+func GetUserLedger(publicKey []byte) UserWalletType {
+	wallet := make(map[TxIDType]Transaction)
 
-func AddTxOToReceiver(txId []byte, blockIndex int, txO TxO) {
-	AddTxOToReceiverSet(txId, blockIndex, txO, uTxOSet)
-}
-
-func AddTxOToReceiverCopy(txId []byte, blockIndex int, txO TxO, uTxOSetCopy UTxOSetType) {
-	AddTxOToReceiverSet(txId, blockIndex, txO, uTxOSetCopy)
-}
-
-func AddTxOToReceiverSet(txId []byte, blockIndex int, txO TxO, uTxOSet UTxOSetType) {
-	uTxO := UTxO{
-		ID: UTxOID{
-			Address: txO.Address,
-			TxID:    txId,
-		},
-		Amount: txO.Amount,
-		Index:  blockIndex,
+	for _, tx := range uTxOSet {
+		for _, txO := range tx.TxOuts {
+			if reflect.DeepEqual(txO.ScriptPubKey, publicKey) {
+				wallet[TxIDType(tx.ID)] = tx
+				break
+			}
+		}
 	}
 
-	receiverUTxOs := uTxOSet[PublicKeyAddressType(txO.Address)]
-	if receiverUTxOs == nil {
-		uTxOMap := make(map[TxIDType]UTxO)
-		uTxOMap[TxIDType(txId)] = uTxO
+	return wallet
+}
 
-		uTxOSet[PublicKeyAddressType(txO.Address)] = uTxOMap
-		return
+func AddTxToUTxOSet(tx Transaction) {
+	txCopy := Transaction{
+		ID:        tx.ID,
+		Locktime:  tx.Locktime,
+		Timestamp: tx.Timestamp,
+		TxIns:     tx.TxIns,
+		TxOuts:    tx.TxOuts,
 	}
-
-	uTxOSet[PublicKeyAddressType(txO.Address)][TxIDType(txId)] = uTxO
+	// bytes, _ := json.Marshal(tx)
+	// json.Unmarshal(bytes, &txCopy)
+	AddTxSpecifiedToUTxOSet(txCopy, uTxOSet)
 }
 
-func RemoveUTxOFromSender(txIn TxIn) {
-	RemoveUTxOFromSenderCopy(txIn, uTxOSet)
+func AddTxToUTxOSetCopy(tx Transaction, uTxOSetCopy UTxOSetType) {
+	AddTxSpecifiedToUTxOSet(tx, uTxOSetCopy)
 }
 
-func RemoveUTxOFromSenderCopy(txIn TxIn, uTxOSet UTxOSetType) {
-	delete(uTxOSet[PublicKeyAddressType(txIn.UTxOID.Address)], TxIDType(txIn.UTxOID.TxID))
+func AddTxSpecifiedToUTxOSet(tx Transaction, uTxOSet UTxOSetType) {
+	uTxOSet[TxIDType(tx.ID)] = tx
+}
+
+func RemoveTxOFromUTxOSet(txID TxIDType, txIn TxIn) {
+	RemoveTxOFromUTxOCopy(txID, txIn, uTxOSet)
+}
+
+func RemoveTxOFromUTxOCopy(txID TxIDType, txIn TxIn, uTxOSet UTxOSetType) {
+	index := txIn.TxOIndex
+	uTxOID := txIn.TxID
+	txOs := uTxOSet[TxIDType(uTxOID)].TxOuts
+
+	remainingTxOs := append(txOs[:index], txOs[index+1:]...)
+	if len(remainingTxOs) == 0 {
+		delete(uTxOSet, TxIDType(uTxOID))
+	} else {
+		tx := uTxOSet[TxIDType(uTxOID)]
+		tx.TxOuts = remainingTxOs
+		uTxOSet[TxIDType(uTxOID)] = tx
+	}
 }
 
 func ClearUTxOSet() {
-	uTxOSet = UTxOSetType(make(map[PublicKeyAddressType]map[TxIDType]UTxO, 0))
+	uTxOSet = UTxOSetType(make(map[TxIDType]Transaction))
 }
 
 func (t TxIn) String() string {
-	return fmt.Sprintf("{\nuTxOID: %s\nuTxOIndex: %+v\nUtxOuts: %+v\n}\n", t.UTxOID, t.UTxOIndex, Base64Encode(t.Signature))
+	return fmt.Sprintf("{\nTxID: %s\nuTxOIndex: %+v\nscriptSig: %+v\n}\n", t.TxID, t.TxOIndex, Base64Encode(t.ScriptSignature))
 }
 
 func (t TxO) String() string {
-	return fmt.Sprintf("{\nAddress: %s\nAmount: %+v\n}\n", Base64Encode(t.Address), t.Amount)
-}
-
-func (t UTxOID) String() string {
-	return fmt.Sprintf("{\nAddress: %s\nTxID: %+v\n}\n", Base64Encode(t.Address), t.TxID)
-}
-
-func (t UTxO) String() string {
-	return fmt.Sprintf("{\nId: %s\nIndex: %+v\nAmount: %+v\n}\n", t.ID, t.Index, t.Amount)
+	return fmt.Sprintf("{\nAddress: %s\nAmount: %+v\n}\n", Base64Encode(t.ScriptPubKey), t.Value)
 }
 
 func Base64Encode(message []byte) []byte {
@@ -111,14 +104,12 @@ func Base64Encode(message []byte) []byte {
 }
 
 func CopyUTxOSet() UTxOSetType {
-	uTxOSetCopy := make(map[PublicKeyAddressType]map[TxIDType]UTxO)
-
-	for k, v := range uTxOSet {
-		id := make(map[TxIDType]UTxO)
-		for k1, v1 := range v {
-			id[k1] = v1
-		}
-		uTxOSetCopy[k] = id
+	uTxOSetCopy := make(map[TxIDType]Transaction)
+	for txID, tx := range uTxOSet {
+		txCopy := Transaction{}
+		bytes, _ := json.Marshal(tx)
+		json.Unmarshal(bytes, &txCopy)
+		uTxOSetCopy[txID] = txCopy
 	}
 
 	return uTxOSetCopy

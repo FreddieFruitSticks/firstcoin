@@ -26,23 +26,20 @@ func (w *Wallet) CreateTransaction(receiverAddress []byte, amount int) (*reposit
 	txIns := make([]repository.TxIn, 0)
 	txOuts := make([]repository.TxO, 0)
 
-	uTxOs, _, err := w.FindUTxOs(amount)
+	txIDIndexPairs, _, err := w.FindUTxOs(amount)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	for _, uTxO := range uTxOs {
+	for _, txIDIndexPair := range txIDIndexPairs {
 		txIn := repository.TxIn{
-			UTxOID: repository.UTxOID{
-				Address: uTxO.ID.Address,
-				TxID:    uTxO.ID.TxID,
-			},
-			UTxOIndex: uTxO.Index,
+			TxOIndex: txIDIndexPair.TxOIndex,
+			TxID:     txIDIndexPair.TxID,
 		}
 		txIns = append(txIns, txIn)
 	}
 
-	txOs, _ := w.GetTxOs(amount, receiverAddress, uTxOs)
+	txOs, _ := w.GetTxOs(amount, receiverAddress, txIns)
 	for _, txO := range txOs {
 		txOuts = append(txOuts, txO)
 	}
@@ -64,29 +61,20 @@ func (w *Wallet) CreateTransaction(receiverAddress []byte, amount int) (*reposit
 
 	// sign all txIns from same sender.
 	for i := 0; i < len(transaction.TxIns); i++ {
-		transaction.TxIns[i].Signature = signature
+		transaction.TxIns[i].ScriptSignature = signature
 	}
 
 	return &transaction, now, nil
 }
 
-func CreateCoinbaseTransaction(crypt Cryptographic, blockIndex int) (repository.Transaction, int) {
+func CreateCoinbaseTransaction(crypt Cryptographic) (repository.Transaction, int) {
 	// First create the transaction with TxIns and TxOuts - tx id and txIn signature are not included yet
 	txIns := make([]repository.TxIn, 0)
 	txOuts := make([]repository.TxO, 0)
-	txIn := repository.TxIn{
-		UTxOID: repository.UTxOID{
-			Address: []byte{},
-			TxID:    []byte{},
-		},
-		UTxOIndex: blockIndex,
-	}
-
-	txIns = append(txIns, txIn)
 
 	txOut := repository.TxO{
-		Amount:  COINBASE_TRANSACTION_AMOUNT,
-		Address: crypt.PublicKey,
+		Value:        COINBASE_TRANSACTION_AMOUNT,
+		ScriptPubKey: crypt.PublicKey,
 	}
 	txOuts = append(txOuts, txOut)
 
@@ -102,11 +90,6 @@ func CreateCoinbaseTransaction(crypt Cryptographic, blockIndex int) (repository.
 	txID := GenerateTransactionID(transaction)
 	transaction.ID = txID
 
-	// tx input signature is the tx id signed by the spender of coins - this will be used later to verify that the uTxO public key
-	// is the true owner and authoriser of this signed transaction
-	txInSignature := crypt.GenerateSignature(txID)
-	txIns[0].Signature = txInSignature
-
 	return transaction, now
 }
 
@@ -117,11 +100,11 @@ func GenerateTransactionID(transaction repository.Transaction) []byte {
 	concatTxOut := ""
 
 	for _, txIn := range transaction.TxIns {
-		concatTxIn += string(txIn.UTxOID.Address) + strconv.Itoa(txIn.UTxOIndex)
+		concatTxIn += string(txIn.TxID) + strconv.Itoa(txIn.TxOIndex)
 	}
 
 	for _, txOut := range transaction.TxOuts {
-		concatTxOut += string(txOut.Address) + strconv.Itoa(txOut.Amount)
+		concatTxOut += string(txOut.ScriptPubKey) + strconv.Itoa(txOut.Value)
 	}
 
 	_, err := msgHash.Write([]byte(fmt.Sprintf("%s%s%d", concatTxIn, concatTxOut, transaction.Timestamp)))
@@ -135,7 +118,7 @@ type prettyTxO struct {
 	Amount  int
 }
 
-func AreValidTransactions(transactions []repository.Transaction, blockIndex int) error {
+func AreValidTransactions(transactions []repository.Transaction) error {
 	if len(transactions) == 0 {
 		return fmt.Errorf("Invalid transactions. Cant have empty transactions")
 	}
@@ -143,7 +126,7 @@ func AreValidTransactions(transactions []repository.Transaction, blockIndex int)
 	// first transaction in the list is always the coinbase transaction
 	coinbaseTransaction := transactions[0]
 
-	if err := IsValidCoinbaseTransaction(coinbaseTransaction, blockIndex); err != nil {
+	if err := IsValidCoinbaseTransaction(coinbaseTransaction); err != nil {
 		return err
 	}
 
@@ -165,7 +148,7 @@ func IsValidTransactionCopy(tx repository.Transaction, uTxOSet repository.UTxOSe
 		return fmt.Errorf("Invalid transaction: txIns length must be greater than 0")
 	}
 
-	if err := AreValidTxIns(tx.TxIns, uTxOSet); err != nil {
+	if err := AreValidTxIns(tx, uTxOSet); err != nil {
 		return fmt.Errorf("invalid txIn %+v", err)
 	}
 
@@ -179,15 +162,9 @@ func IsValidTransactionCopy(tx repository.Transaction, uTxOSet repository.UTxOSe
 
 	tID := GenerateTransactionID(tx)
 	if !reflect.DeepEqual(tID, tx.ID) {
-		return fmt.Errorf("Invalid transaction id: %s. generate: %s", tx.ID, tID)
+		return fmt.Errorf("Invalid transaction id: %s. generated: %s", repository.Base64Encode(tx.ID), repository.Base64Encode(tID))
 	}
 
-	for _, txIn := range tx.TxIns {
-		if err := VerifySignature(txIn.Signature, txIn.UTxOID.Address, tx.ID); err != nil {
-			return fmt.Errorf("Invalid transaction - signature verification failed: %+v", err.Error())
-
-		}
-	}
 	if err := VerifyTransactionAmountCopy(tx, uTxOSet); err != nil {
 		return fmt.Errorf("Invalid transaction - amount verification failed: %+v", err.Error())
 	}
@@ -195,20 +172,12 @@ func IsValidTransactionCopy(tx repository.Transaction, uTxOSet repository.UTxOSe
 	return nil
 }
 
-func IsValidCoinbaseTransaction(transaction repository.Transaction, blockIndex int) error {
-	if len(transaction.TxIns) != 1 {
-		return fmt.Errorf("Invalid coinbase transaction txIns length > 0")
-	}
-
+func IsValidCoinbaseTransaction(transaction repository.Transaction) error {
 	if len(transaction.TxOuts) != 1 {
 		return fmt.Errorf("Invalid coinbase transaction txOuts length > 0")
 	}
 
-	if transaction.TxOuts[0].Amount != COINBASE_TRANSACTION_AMOUNT {
-		return fmt.Errorf("Invalid coinbase transaction amount != COINBASE_TRANSACTION_AMOUNT")
-	}
-
-	if transaction.TxIns[0].UTxOIndex != blockIndex {
+	if transaction.TxOuts[0].Value != COINBASE_TRANSACTION_AMOUNT {
 		return fmt.Errorf("Invalid coinbase transaction amount != COINBASE_TRANSACTION_AMOUNT")
 	}
 
@@ -228,79 +197,67 @@ func VerifyTransactionAmountCopy(tx repository.Transaction, uTxOSet repository.U
 	totalAmountFromUTxOs := 0
 
 	for _, txIn := range tx.TxIns {
-		uTxOId := txIn.UTxOID
-
-		spenderLedger := uTxOSet[repository.PublicKeyAddressType(uTxOId.Address)]
-
-		if len(spenderLedger) == 0 {
-			return fmt.Errorf("spender does not exist in public ledger")
-		}
-
-		spenderUTxO := spenderLedger[repository.TxIDType(uTxOId.TxID)]
-		if err := IsValidUTxOStructure(spenderUTxO); err != nil {
+		spenderUTxO, err := getUTxOFromTxIn(txIn, uTxOSet)
+		if err != nil {
 			return err
 		}
-		totalAmountFromUTxOs += spenderUTxO.Amount
+
+		if err := IsValidTxOutStructure(*spenderUTxO); err != nil {
+			return err
+		}
+		totalAmountFromUTxOs += spenderUTxO.Value
 	}
 
-	if tx.TxOuts[0].Amount > totalAmountFromUTxOs {
+	if tx.TxOuts[0].Value > totalAmountFromUTxOs {
 		return fmt.Errorf("unspent transaction output does not have enough coin")
 	}
 
 	return nil
 }
 
-func IsValidUTxOStructure(uTxO repository.UTxO) error {
-	if uTxO.Amount <= 0 {
-		return fmt.Errorf("spender must reference a uTxO with more than 0 coins")
-	}
-
-	if len(uTxO.ID.Address) == 0 {
-		return fmt.Errorf("uTxO address cannot be empty")
-	}
-
-	if len(uTxO.ID.TxID) == 0 {
-		return fmt.Errorf("uTxO ID invalid")
-	}
-
-	if uTxO.Index < 0 {
-		return fmt.Errorf("uTxO Index invalid - must be a valid block index")
-	}
-
-	return nil
-}
-
-func IsValidTxIn(txIn repository.TxIn, uTxOSet repository.UTxOSetType) error {
-	spenderLedger, ok := uTxOSet[repository.PublicKeyAddressType(txIn.UTxOID.Address)]
-
-	// This means that spender cant use the same uTxO in the same mempool. when validating entire pool the utxo will disappear.
+func IsValidTxIn(txIn repository.TxIn, uTxOSet repository.UTxOSetType, txID []byte) error {
+	spenderTx, ok := uTxOSet[repository.TxIDType(txIn.TxID)]
 	if !ok {
-		return fmt.Errorf("invalid txIn. spender ledger does not exist")
+		return fmt.Errorf("Invalid txIn - no tx for in set for txID in txIn")
 	}
 
-	_, ok = spenderLedger[repository.TxIDType(txIn.UTxOID.TxID)]
-	if !ok {
-		return fmt.Errorf("invalid txIn. spender uTxO does not exist")
+	if txIn.TxOIndex >= len(spenderTx.TxOuts) {
+		return fmt.Errorf("Invalid txIn - referenced txO index does not exist")
 	}
 
-	if len(txIn.UTxOID.Address) == 0 {
-		return fmt.Errorf("txIn UTxO address cannot be empty")
+	uTxO := spenderTx.TxOuts[txIn.TxOIndex]
+	if err := VerifySignature(txIn.ScriptSignature, uTxO.ScriptPubKey, txID); err != nil {
+		return fmt.Errorf("Invalid transaction - signature verification failed: %+v", err.Error())
+
 	}
 
-	if len(txIn.UTxOID.TxID) == 0 {
-		return fmt.Errorf("txIn UTxOID TxID cannot be empty")
+	if len(txIn.TxID) == 0 {
+		return fmt.Errorf("txIn UTxO TxID cannot be empty")
 	}
 
-	if len(txIn.Signature) == 0 {
+	if len(txIn.ScriptSignature) == 0 {
 		return fmt.Errorf("txIn Signature cannot be empty")
 	}
 
 	return nil
 }
 
-func AreValidTxIns(txIns []repository.TxIn, uTxOSet repository.UTxOSetType) error {
-	for index, txIn := range txIns {
-		if err := IsValidTxIn(txIn, uTxOSet); err != nil {
+func getUTxOFromTxIn(txIn repository.TxIn, uTxOSet repository.UTxOSetType) (*repository.TxO, error) {
+	spenderTx, ok := uTxOSet[repository.TxIDType(txIn.TxID)]
+	if !ok {
+		return nil, fmt.Errorf("Invalid txIn - no tx for in set for txID in txIn")
+	}
+
+	if txIn.TxOIndex >= len(spenderTx.TxOuts) {
+		return nil, fmt.Errorf("Invalid txIn - referenced txO index does not exist")
+	}
+
+	return &spenderTx.TxOuts[txIn.TxOIndex], nil
+}
+
+func AreValidTxIns(tx repository.Transaction, uTxOSet repository.UTxOSetType) error {
+	for index, txIn := range tx.TxIns {
+		if err := IsValidTxIn(txIn, uTxOSet, tx.ID); err != nil {
 			return fmt.Errorf("error in txIn number %d. error: %+v", index, err)
 		}
 	}
@@ -309,11 +266,11 @@ func AreValidTxIns(txIns []repository.TxIn, uTxOSet repository.UTxOSetType) erro
 }
 
 func IsValidTxOutStructure(txOut repository.TxO) error {
-	if len(txOut.Address) == 0 {
+	if len(txOut.ScriptPubKey) == 0 {
 		return fmt.Errorf("invalid txOut: address must be valid public key")
 	}
 
-	if txOut.Amount <= 0 {
+	if txOut.Value <= 0 {
 		return fmt.Errorf("invalid txOut: amount must be > 0")
 	}
 
@@ -330,23 +287,35 @@ func AreValidTxOuts(txOuts []repository.TxO) error {
 	return nil
 }
 
+type TxIDIndexPair struct {
+	TxID     []byte
+	TxOIndex int
+}
+
 // finding the senders UTxOs that can service the Tx amount - currently the strategy is simply to take the first set of uTxOs
-// that is not already included in the txPool. With the idea of parent-child txs can maybe have multiple txs on single uTxO???
-func (w *Wallet) FindUTxOs(amount int) ([]repository.UTxO, int, error) {
-	spenderUTxOs := repository.GetUserLedger(w.Crypt.PublicKey)
-	uTxOs := make([]repository.UTxO, 0)
+// that is not already included in the txPool. If the tx is in the txPool, we will alter the txOs and the index will not be correct for
+// the next txIn - TODO: think of something smarter
+func (w *Wallet) FindUTxOs(amount int) ([]TxIDIndexPair, int, error) {
+	spenderLedger := repository.GetUserLedger(w.Crypt.PublicKey)
+	uTxOs := make([]TxIDIndexPair, 0)
 
 	totalAmount := 0
 
-	for _, uTxO := range spenderUTxOs {
-		if totalAmount < amount && !isUTxOInTxPool(uTxO) {
-			uTxOs = append(uTxOs, uTxO)
-			totalAmount += uTxO.Amount
-			continue
-		}
+	for _, tx := range spenderLedger {
+		for index, uTxO := range tx.TxOuts {
+			if totalAmount < amount && !isUTxOInTxPool(tx.ID) && uTxOBelongsToSpender(uTxO, w.Crypt.PublicKey) {
+				uTxOs = append(uTxOs, TxIDIndexPair{
+					TxID:     tx.ID,
+					TxOIndex: index,
+				})
+				totalAmount += uTxO.Value
+				break
 
-		if totalAmount >= amount {
-			break
+			}
+
+			if totalAmount >= amount {
+				return uTxOs, totalAmount, nil
+			}
 		}
 	}
 
@@ -357,18 +326,22 @@ func (w *Wallet) FindUTxOs(amount int) ([]repository.UTxO, int, error) {
 	return uTxOs, totalAmount, nil
 }
 
+func uTxOBelongsToSpender(uTxO repository.TxO, spenderPublicKey []byte) bool {
+	return reflect.DeepEqual(uTxO.ScriptPubKey, spenderPublicKey)
+}
+
 // can only send to one receiver, and can get change
-func (w *Wallet) GetTxOs(amount int, receiverAddress []byte, uTxOs []repository.UTxO) ([]repository.TxO, error) {
+func (w *Wallet) GetTxOs(amount int, receiverAddress []byte, txIns []repository.TxIn) ([]repository.TxO, error) {
 	txOs := make([]repository.TxO, 0)
 
-	valid, totalAmount := validateUTxOsCanServiceAmount(uTxOs, amount)
+	valid, totalAmount := w.validateTxInsCanServiceAmount(txIns, amount)
 	if !valid {
 		return nil, fmt.Errorf("uTxOs cannot service amount. uTxO total: %d. amount: %d", totalAmount, amount)
 	}
 
 	txO := repository.TxO{
-		Address: receiverAddress,
-		Amount:  amount,
+		ScriptPubKey: receiverAddress,
+		Value:        amount,
 	}
 
 	txOs = append(txOs, txO)
@@ -378,8 +351,8 @@ func (w *Wallet) GetTxOs(amount int, receiverAddress []byte, uTxOs []repository.
 	if totalAmount > amount {
 		change = totalAmount - amount
 		changeTxO := repository.TxO{
-			Address: w.Crypt.PublicKey,
-			Amount:  change,
+			ScriptPubKey: w.Crypt.PublicKey,
+			Value:        change,
 		}
 
 		txOs = append(txOs, changeTxO)
@@ -388,24 +361,44 @@ func (w *Wallet) GetTxOs(amount int, receiverAddress []byte, uTxOs []repository.
 	return txOs, nil
 }
 
-func validateUTxOsCanServiceAmount(uTxOs []repository.UTxO, amount int) (bool, int) {
+func (w *Wallet) validateTxInsCanServiceAmount(txIns []repository.TxIn, amount int) (bool, int) {
 	totalAmount := 0
 
-	for _, uTxO := range uTxOs {
-		totalAmount += uTxO.Amount
+	for _, txIn := range txIns {
+		spenderTxs := repository.GetUserLedger(w.Crypt.PublicKey)
+		tx := spenderTxs[repository.TxIDType(txIn.TxID)]
+		totalAmount += tx.TxOuts[txIn.TxOIndex].Value
 	}
 
 	return totalAmount >= amount, totalAmount
 }
 
-func isUTxOInTxPool(uTxO repository.UTxO) bool {
+func isUTxOInTxPool(txID []byte) bool {
 	txPool := repository.GetTxPool()
 
-	for _, v := range txPool {
-		if reflect.DeepEqual(uTxO.ID.TxID, v.TxIns[0].UTxOID.TxID) {
-			return true
+	for _, tx := range txPool {
+		for _, txIn := range tx.TxIns {
+			if reflect.DeepEqual(txIn.TxID, txID) {
+				return true
+			}
 		}
 	}
 
 	return false
+}
+
+func GetTotalAmount(publicKey []byte) int {
+	userLedger := repository.GetUserLedger(publicKey)
+
+	totalAmount := 0
+
+	for _, tx := range userLedger {
+		for _, uTxO := range tx.TxOuts {
+			if reflect.DeepEqual(uTxO.ScriptPubKey, publicKey) {
+				totalAmount += uTxO.Value
+			}
+		}
+	}
+
+	return totalAmount
 }

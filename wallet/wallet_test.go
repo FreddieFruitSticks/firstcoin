@@ -4,6 +4,7 @@ import (
 	"blockchain/repository"
 	"blockchain/wallet"
 	"reflect"
+	"sort"
 	"testing"
 )
 
@@ -12,24 +13,14 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 		crypt := wallet.NewCryptographic()
 		crypt.GenerateKeyPair()
 
-		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*crypt, 1)
+		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*crypt)
 
 		txIns := make([]repository.TxIn, 0)
 		txOuts := make([]repository.TxO, 0)
-		txIn := repository.TxIn{
-			UTxOID: repository.UTxOID{
-				Address: []byte{},
-				TxID:    []byte{},
-			},
-			UTxOIndex: 1,
-			Signature: []byte{},
-		}
-
-		txIns = append(txIns, txIn)
 
 		txOut := repository.TxO{
-			Amount:  wallet.COINBASE_TRANSACTION_AMOUNT,
-			Address: crypt.PublicKey,
+			Value:        wallet.COINBASE_TRANSACTION_AMOUNT,
+			ScriptPubKey: crypt.PublicKey,
 		}
 		txOuts = append(txOuts, txOut)
 
@@ -43,10 +34,7 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 		txID := wallet.GenerateTransactionID(expectedTx)
 		expectedTx.ID = txID
 
-		txInSignature := crypt.GenerateSignature(txID)
-		txIns[0].Signature = txInSignature
-
-		if err := wallet.IsValidCoinbaseTransaction(coinbaseTx, 1); err != nil {
+		if err := wallet.IsValidCoinbaseTransaction(coinbaseTx); err != nil {
 			t.Fatalf("coinbase Tx not valid %s", err.Error())
 		}
 
@@ -57,70 +45,40 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 		if !reflect.DeepEqual(expectedTx.TxOuts, coinbaseTx.TxOuts) {
 			t.Fatalf("coinbase Tx TxOuts not equal to expected Tx TxOuts")
 		}
-
-		if !reflect.DeepEqual(expectedTx.TxIns[0].UTxOID, coinbaseTx.TxIns[0].UTxOID) {
-			t.Fatalf("coinbase Tx Ins UTxOID not equal to expected Tx Ins UTxOID")
-		}
-
-		if !reflect.DeepEqual(expectedTx.TxIns[0].UTxOIndex, coinbaseTx.TxIns[0].UTxOIndex) {
-			t.Fatalf("coinbase Tx Ins UTxOIndex not equal to expected Tx Ins UTxOIndex")
-		}
-
-		expectedTxSigErr := wallet.VerifySignature(expectedTx.TxIns[0].Signature, crypt.PublicKey, wallet.GenerateTransactionID(expectedTx))
-		coinbaseTxSigErr := wallet.VerifySignature(coinbaseTx.TxIns[0].Signature, crypt.PublicKey, wallet.GenerateTransactionID(coinbaseTx))
-
-		if expectedTxSigErr != nil || coinbaseTxSigErr != nil {
-			t.Fatalf("coinbase Tx Signatures invalid")
-		}
 	})
 }
 
 func TestCreateTransaction(t *testing.T) {
 	t.Run("validate successful transaction - 2 inputs with change", func(t *testing.T) {
-		amount := 100
-		// uTxOAmount := 200
-
-		// the output of a previous transaction that was sent to the sender of this transaction.
-		previousTxID := []byte{1, 2, 3}
-		previousTxID2 := []byte{1, 2, 3, 4}
-
 		senderCrypt := wallet.NewCryptographic()
 		senderCrypt.GenerateKeyPair()
 
 		receiverCrypt := wallet.NewCryptographic()
 		receiverCrypt.GenerateKeyPair()
 
+		amount := 8
+
+		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*senderCrypt)
+		repository.AddTxToUTxOSet(coinbaseTx)
+
 		txIns := make([]repository.TxIn, 0)
 		txOuts := make([]repository.TxO, 0)
 
 		txIn := repository.TxIn{
-			UTxOID: repository.UTxOID{
-				Address: senderCrypt.PublicKey,
-				TxID:    previousTxID,
-			},
-			UTxOIndex: 1,
-			Signature: []byte{},
-		}
-
-		txIn2 := repository.TxIn{
-			UTxOID: repository.UTxOID{
-				Address: senderCrypt.PublicKey,
-				TxID:    previousTxID2,
-			},
-			UTxOIndex: 1,
-			Signature: []byte{},
+			TxID:            coinbaseTx.ID,
+			TxOIndex:        0,
+			ScriptSignature: []byte{},
 		}
 
 		txIns = append(txIns, txIn)
-		txIns = append(txIns, txIn2)
 
 		txOutReceiver := repository.TxO{
-			Address: receiverCrypt.PublicKey,
-			Amount:  amount,
+			ScriptPubKey: receiverCrypt.PublicKey,
+			Value:        amount,
 		}
 		txOutSenderChange := repository.TxO{
-			Address: senderCrypt.PublicKey,
-			Amount:  20,
+			ScriptPubKey: senderCrypt.PublicKey,
+			Value:        2,
 		}
 		txOuts = append(txOuts, txOutReceiver)
 		txOuts = append(txOuts, txOutSenderChange)
@@ -131,35 +89,19 @@ func TestCreateTransaction(t *testing.T) {
 			TxOuts: txOuts,
 		}
 
-		txO1 := repository.TxO{
-			Address: senderCrypt.PublicKey,
-			Amount:  70,
-		}
+		senderWallet := wallet.NewWallet(*senderCrypt)
 
-		txO2 := repository.TxO{
-			Address: senderCrypt.PublicKey,
-			Amount:  50,
-		}
-
-		repository.AddTxOToReceiver(previousTxID, 1, txO1)
-		repository.AddTxOToReceiver(previousTxID2, 1, txO2)
-
-		userWallet := wallet.NewWallet(*senderCrypt)
-
-		tx, now, _ := userWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
+		tx, now, _ := senderWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
 
 		expectedSenderTx.Timestamp = now
 
 		expectedTxID := wallet.GenerateTransactionID(expectedSenderTx)
 
-		// this should actually be the txID of a different, older, tx.
 		expectedSenderTx.ID = expectedTxID
 
-		txIns[0].UTxOID.TxID = previousTxID
-		txIns[0].Signature = senderCrypt.GenerateSignature(expectedTxID)
-		txIns[1].Signature = senderCrypt.GenerateSignature(expectedTxID)
+		txIns[0].ScriptSignature = senderCrypt.GenerateSignature(expectedTxID)
 
-		if err := wallet.IsValidTransaction(expectedSenderTx); err != nil {
+		if err := wallet.IsValidTransaction(*tx); err != nil {
 			t.Fatalf("Test failed: %+v", err)
 		}
 
@@ -171,130 +113,87 @@ func TestCreateTransaction(t *testing.T) {
 			t.Fatalf("Tx TxOuts not equal to expected Tx TxOuts")
 		}
 
-		if !reflect.DeepEqual(expectedSenderTx.TxIns[0].UTxOID, tx.TxIns[0].UTxOID) {
+		if !reflect.DeepEqual(expectedSenderTx.TxIns[0].TxID, tx.TxIns[0].TxID) {
 			t.Fatalf("Tx Ins UTxOID not equal to expected Tx Ins UTxOID")
 		}
 
-		if !reflect.DeepEqual(expectedSenderTx.TxIns[0].UTxOIndex, tx.TxIns[0].UTxOIndex) {
+		if !reflect.DeepEqual(expectedSenderTx.TxIns[0].TxOIndex, tx.TxIns[0].TxOIndex) {
 			t.Fatalf("Tx Ins UTxOIndex not equal to expected Tx Ins UTxOIndex")
 		}
 	})
 
 	t.Run("invalidate bad tx - not enough money", func(t *testing.T) {
-		amount := 100
-		// uTxOAmount := 200
-
-		// the output of a previous transaction that was sent to the sender of this transaction.
-		previousTxID := []byte{1, 2, 3}
-		previousTxID2 := []byte{1, 2, 3, 4}
-
 		senderCrypt := wallet.NewCryptographic()
 		senderCrypt.GenerateKeyPair()
 
 		receiverCrypt := wallet.NewCryptographic()
 		receiverCrypt.GenerateKeyPair()
 
+		amount := 11
+
+		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*senderCrypt)
+		repository.AddTxToUTxOSet(coinbaseTx)
+
 		txIns := make([]repository.TxIn, 0)
 		txOuts := make([]repository.TxO, 0)
 
 		txIn := repository.TxIn{
-			UTxOID: repository.UTxOID{
-				Address: senderCrypt.PublicKey,
-				TxID:    previousTxID,
-			},
-			UTxOIndex: 1,
-			Signature: []byte{},
-		}
-
-		txIn2 := repository.TxIn{
-			UTxOID: repository.UTxOID{
-				Address: senderCrypt.PublicKey,
-				TxID:    previousTxID2,
-			},
-			UTxOIndex: 1,
-			Signature: []byte{},
+			TxID:            coinbaseTx.ID,
+			TxOIndex:        0,
+			ScriptSignature: []byte{},
 		}
 
 		txIns = append(txIns, txIn)
-		txIns = append(txIns, txIn2)
 
 		txOutReceiver := repository.TxO{
-			Address: receiverCrypt.PublicKey,
-			Amount:  amount,
+			ScriptPubKey: receiverCrypt.PublicKey,
+			Value:        amount,
 		}
 		txOutSenderChange := repository.TxO{
-			Address: senderCrypt.PublicKey,
-			Amount:  20,
+			ScriptPubKey: senderCrypt.PublicKey,
+			Value:        2,
 		}
 		txOuts = append(txOuts, txOutReceiver)
 		txOuts = append(txOuts, txOutSenderChange)
 
-		txO1 := repository.TxO{
-			Address: senderCrypt.PublicKey,
-			Amount:  70,
-		}
+		senderWallet := wallet.NewWallet(*senderCrypt)
 
-		txO2 := repository.TxO{
-			Address: senderCrypt.PublicKey,
-			Amount:  20,
-		}
-
-		repository.AddTxOToReceiver(previousTxID, 1, txO1)
-		repository.AddTxOToReceiver(previousTxID2, 1, txO2)
-
-		userWallet := wallet.NewWallet(*senderCrypt)
-
-		_, _, err := userWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
+		_, _, err := senderWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
 		if err == nil {
 			t.Fatalf("Test failed: expected insufficient funds error")
 		}
 	})
 
 	t.Run("invalidate bad tx - signature incorrect", func(t *testing.T) {
-		amount := 100
-		// uTxOAmount := 200
-
-		// the output of a previous transaction that was sent to the sender of this transaction.
-		previousTxID := []byte{1, 2, 3}
-		previousTxID2 := []byte{1, 2, 3, 4}
-
 		senderCrypt := wallet.NewCryptographic()
 		senderCrypt.GenerateKeyPair()
 
 		receiverCrypt := wallet.NewCryptographic()
 		receiverCrypt.GenerateKeyPair()
 
+		amount := 8
+
+		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*senderCrypt)
+		repository.AddTxToUTxOSet(coinbaseTx)
+
 		txIns := make([]repository.TxIn, 0)
 		txOuts := make([]repository.TxO, 0)
 
 		txIn := repository.TxIn{
-			UTxOID: repository.UTxOID{
-				Address: senderCrypt.PublicKey,
-				TxID:    previousTxID,
-			},
-			UTxOIndex: 1,
-			Signature: []byte{},
-		}
-
-		txIn2 := repository.TxIn{
-			UTxOID: repository.UTxOID{
-				Address: senderCrypt.PublicKey,
-				TxID:    previousTxID2,
-			},
-			UTxOIndex: 1,
-			Signature: []byte{},
+			TxID:            coinbaseTx.ID,
+			TxOIndex:        0,
+			ScriptSignature: []byte{},
 		}
 
 		txIns = append(txIns, txIn)
-		txIns = append(txIns, txIn2)
 
 		txOutReceiver := repository.TxO{
-			Address: receiverCrypt.PublicKey,
-			Amount:  amount,
+			ScriptPubKey: receiverCrypt.PublicKey,
+			Value:        amount,
 		}
 		txOutSenderChange := repository.TxO{
-			Address: senderCrypt.PublicKey,
-			Amount:  20,
+			ScriptPubKey: senderCrypt.PublicKey,
+			Value:        2,
 		}
 		txOuts = append(txOuts, txOutReceiver)
 		txOuts = append(txOuts, txOutSenderChange)
@@ -305,98 +204,69 @@ func TestCreateTransaction(t *testing.T) {
 			TxOuts: txOuts,
 		}
 
-		txO1 := repository.TxO{
-			Address: senderCrypt.PublicKey,
-			Amount:  70,
-		}
+		senderWallet := wallet.NewWallet(*senderCrypt)
 
-		txO2 := repository.TxO{
-			Address: senderCrypt.PublicKey,
-			Amount:  20,
-		}
-
-		repository.AddTxOToReceiver(previousTxID, 1, txO1)
-		repository.AddTxOToReceiver(previousTxID2, 1, txO2)
-
-		userWallet := wallet.NewWallet(*senderCrypt)
-
-		_, now, err := userWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
-		if err == nil {
-			t.Fatalf("Test failed: expected insufficient funds error")
-		}
+		tx, now, _ := senderWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
 
 		expectedSenderTx.Timestamp = now
 
 		expectedTxID := wallet.GenerateTransactionID(expectedSenderTx)
-		// uTxO.ID = expectedTxID
 
-		// senderWallet := wallet.NewWallet(uTxOSet, *senderCrypt)
-
-		// this should actually be the txID of a different, older, tx.
 		expectedSenderTx.ID = expectedTxID
 
-		txIns[0].UTxOID.TxID = previousTxID
-		txIns[0].Signature = senderCrypt.GenerateSignature(expectedTxID)
-		txIns[1].Signature = []byte{1, 2, 3}
+		tx.TxIns[0].ScriptSignature = []byte{1, 2, 3}
 
-		if err := wallet.IsValidTransaction(expectedSenderTx); err == nil ||
-			(err != nil && err.Error() != "Invalid transaction - signature verification failed: crypto/rsa: verification error") {
-			t.Fatalf("Test failed: expected signature check to fail.\nGot: %s", err.Error())
+		if err := wallet.IsValidTransaction(*tx); err == nil ||
+			(err != nil && err.Error() != "invalid txIn error in txIn number 0. error: Invalid transaction - signature verification failed: crypto/rsa: verification error") {
+			t.Fatalf("Test failed: expected signature check to fail")
 		}
 	})
 }
 
 func TestFindUTxOs(test *testing.T) {
-	crypt := wallet.NewCryptographic()
-	crypt.GenerateKeyPair()
 	test.Run("UTxOs can service the amount", func(t *testing.T) {
 		crypt := wallet.NewCryptographic()
 		crypt.GenerateKeyPair()
-		userWallet := wallet.NewWallet(*crypt)
+		senderWallet := wallet.NewWallet(*crypt)
 
-		id1 := []byte{1, 2, 3}
-		uTxO1 := repository.UTxO{
-			ID: repository.UTxOID{
-				Address: crypt.PublicKey,
-				TxID:    id1,
-			},
-			Amount: 70,
-			Index:  1,
-		}
+		crypt2 := wallet.NewCryptographic()
+		crypt2.GenerateKeyPair()
+		senderReceiverWallet := wallet.NewWallet(*crypt2)
 
-		id2 := []byte{4, 5, 6}
-		uTxO2 := repository.UTxO{
-			ID: repository.UTxOID{
-				Address: crypt.PublicKey,
-				TxID:    id2,
-			},
-			Amount: 50,
-			Index:  1,
-		}
+		crypt3 := wallet.NewCryptographic()
+		crypt3.GenerateKeyPair()
 
-		txO1 := repository.TxO{
-			Address: crypt.PublicKey,
-			Amount:  70,
-		}
+		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*crypt)
+		repository.AddTxToUTxOSet(coinbaseTx)
 
-		txO2 := repository.TxO{
-			Address: crypt.PublicKey,
-			Amount:  50,
-		}
+		tx, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 5)
+		tx2, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 5)
+		repository.AddTxToUTxOSet(*tx)
+		repository.AddTxToUTxOSet(*tx2)
 
-		repository.AddTxOToReceiver(id1, 1, txO1)
-		repository.AddTxOToReceiver(id2, 1, txO2)
-
-		expectedUtxOs := make([]repository.UTxO, 0)
-		expectedUtxOs = append(expectedUtxOs, uTxO1)
-		expectedUtxOs = append(expectedUtxOs, uTxO2)
-
-		// expectedUtxOs := []repository.UTxO{uTxO1, uTxO2}
-
-		uTxOs, _, err := userWallet.FindUTxOs(100)
+		uTxOs, _, err := senderReceiverWallet.FindUTxOs(10)
 		if err != nil {
 			t.Fatalf("expected to find UTxOs. err: %s", err)
 		}
+
+		expectedUtxOs := []wallet.TxIDIndexPair{
+			{
+				TxID:     tx2.ID,
+				TxOIndex: 0,
+			},
+			{
+				TxID:     tx.ID,
+				TxOIndex: 0,
+			},
+		}
+
+		sort.SliceStable(expectedUtxOs, func(i, j int) bool {
+			return expectedUtxOs[i].TxID[0] < expectedUtxOs[j].TxID[0]
+		})
+
+		sort.SliceStable(uTxOs, func(i, j int) bool {
+			return uTxOs[i].TxID[0] < uTxOs[j].TxID[0]
+		})
 
 		if !reflect.DeepEqual(uTxOs, expectedUtxOs) {
 			t.Fatalf("incorrect UtxOs\nGot:%+v\nWant:%+v", uTxOs, expectedUtxOs)
@@ -404,34 +274,26 @@ func TestFindUTxOs(test *testing.T) {
 	})
 
 	test.Run("UTxOs cannot service the amount - insufficient funds", func(t *testing.T) {
-		userWallet := wallet.NewWallet(*crypt)
-		repository.ClearUTxOSet()
+		crypt := wallet.NewCryptographic()
+		crypt.GenerateKeyPair()
+		senderWallet := wallet.NewWallet(*crypt)
 
-		id1 := []byte{1, 2, 3}
-		id2 := []byte{4, 5, 6}
+		crypt2 := wallet.NewCryptographic()
+		crypt2.GenerateKeyPair()
+		senderReceiverWallet := wallet.NewWallet(*crypt2)
 
-		txO1 := repository.TxO{
-			Address: crypt.PublicKey,
-			Amount:  70,
-		}
+		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*crypt)
+		repository.AddTxToUTxOSet(coinbaseTx)
 
-		txO2 := repository.TxO{
-			Address: crypt.PublicKey,
-			Amount:  20,
-		}
+		tx, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 5)
+		tx2, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 5)
+		repository.AddTxToUTxOSet(*tx)
+		repository.AddTxToUTxOSet(*tx2)
 
-		repository.AddTxOToReceiver(id1, 1, txO1)
-		repository.AddTxOToReceiver(id2, 1, txO2)
-
-		_, _, err := userWallet.FindUTxOs(100)
-		if err == nil {
-			t.Fatalf("expected to find err")
-		}
-
-		if err != nil && err.Error() != "insufficient funds or no available uTxOs" {
+		_, _, err := senderReceiverWallet.FindUTxOs(11)
+		if err == nil || (err != nil && err.Error() != "insufficient funds or no available uTxOs") {
 			t.Fatalf("incorrect error type, expected insufficient funds, got: %+v", err)
 		}
-
 	})
 }
 
@@ -440,99 +302,40 @@ func TestGetTxOs(test *testing.T) {
 	crypt.GenerateKeyPair()
 
 	test.Run("UTxOs can service the amount", func(t *testing.T) {
-		userWallet := wallet.NewWallet(*crypt)
+		crypt := wallet.NewCryptographic()
+		crypt.GenerateKeyPair()
+		senderWallet := wallet.NewWallet(*crypt)
 
-		id1 := []byte{1, 2, 3}
-		uTxO1 := repository.UTxO{
-			ID: repository.UTxOID{
-				Address: crypt.PublicKey,
-				TxID:    id1,
-			},
-			Amount: 70,
-			Index:  1,
-		}
+		crypt2 := wallet.NewCryptographic()
+		crypt2.GenerateKeyPair()
 
-		id2 := []byte{4, 5, 6}
-		uTxO2 := repository.UTxO{
-			ID: repository.UTxOID{
-				Address: crypt.PublicKey,
-				TxID:    id2,
-			},
-			Amount: 50,
-			Index:  1,
-		}
+		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*crypt)
+		repository.AddTxToUTxOSet(coinbaseTx)
 
-		uTxOs := make([]repository.UTxO, 0)
-		uTxOs = append(uTxOs, uTxO1)
-		uTxOs = append(uTxOs, uTxO2)
+		tx, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 6)
 
-		receiverAddress := []byte{1, 2, 3}
+		txOs := tx.TxOuts
 
-		expectedTxOs := make([]repository.TxO, 0)
-		expectedTxOs = append(expectedTxOs, repository.TxO{
-			Address: receiverAddress,
-			Amount:  100,
+		sort.SliceStable(txOs, func(i, j int) bool {
+			return txOs[i].Value > txOs[j].Value
 		})
 
-		expectedTxOs = append(expectedTxOs, repository.TxO{
-			Address: crypt.PublicKey,
-			Amount:  20,
-		})
-
-		txOs, err := userWallet.GetTxOs(100, receiverAddress, uTxOs)
-		if err != nil {
-			t.Fatalf("expected to find UTxOs. err: %s", err)
+		expectedTxO1 := repository.TxO{
+			ScriptPubKey: crypt2.PublicKey,
+			Value:        6,
 		}
 
-		if !reflect.DeepEqual(txOs, expectedTxOs) {
-			t.Fatalf("incorrect UtxOs\nGot:%+v\nWant:%+v", uTxOs, expectedTxOs)
-		}
-	})
-
-	test.Run("UTxOs cannot service the amount - insufficient funds", func(t *testing.T) {
-		userWallet := wallet.NewWallet(*crypt)
-
-		id1 := []byte{1, 2, 3}
-		uTxO1 := repository.UTxO{
-			ID: repository.UTxOID{
-				Address: crypt.PublicKey,
-				TxID:    id1,
-			},
-			Amount: 20,
-			Index:  1,
+		expectedTxO2 := repository.TxO{
+			ScriptPubKey: crypt.PublicKey,
+			Value:        4,
 		}
 
-		id2 := []byte{4, 5, 6}
-		uTxO2 := repository.UTxO{
-			ID: repository.UTxOID{
-				Address: crypt.PublicKey,
-				TxID:    id2,
-			},
-			Amount: 50,
-			Index:  1,
+		if !reflect.DeepEqual(txOs[0], expectedTxO1) {
+			t.Fatalf("incorrect txO1 \nGot:%+v\nWant:%+v", txOs[0], expectedTxO1)
 		}
 
-		uTxOs := make([]repository.UTxO, 0)
-		uTxOs = append(uTxOs, uTxO1)
-		uTxOs = append(uTxOs, uTxO2)
-
-		receiverAddress := []byte{1, 2, 3}
-
-		expectedTxOs := make([]repository.TxO, 0)
-		expectedTxOs = append(expectedTxOs, repository.TxO{
-			Address: receiverAddress,
-			Amount:  100,
-		})
-
-		expectedTxOs = append(expectedTxOs, repository.TxO{
-			Address: crypt.PublicKey,
-			Amount:  20,
-		})
-
-		_, err := userWallet.GetTxOs(100, receiverAddress, uTxOs)
-		if err == nil {
-			t.Fatalf("expected error of insufficient funds")
+		if !reflect.DeepEqual(txOs[1], expectedTxO2) {
+			t.Fatalf("incorrect txO2 \nGot:%+v\nWant:%+v", txOs[1], expectedTxO2)
 		}
-
 	})
 }

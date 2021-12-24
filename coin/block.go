@@ -91,7 +91,7 @@ func (b *Block) IsValidBlock(previousBlock Block) error {
 		return fmt.Errorf("Invalid block: %s", "invalid timestamps")
 	}
 
-	if err := wallet.AreValidTransactions(b.Transactions, b.Index); err != nil {
+	if err := wallet.AreValidTransactions(b.Transactions); err != nil {
 		return fmt.Errorf("Invalid block: %s. error: %s", "invalid transactions", err.Error())
 	}
 
@@ -175,7 +175,7 @@ func concatTransactionIDs(transactions []repository.Transaction) []byte {
 	for _, transaction := range transactions {
 		concatTxInSignatures := []byte{}
 		for _, txIn := range transaction.TxIns {
-			concatTxInSignatures = append(concatTxInSignatures, txIn.Signature...)
+			concatTxInSignatures = append(concatTxInSignatures, txIn.ScriptSignature...)
 		}
 
 		concatTransaction = append(concatTransaction, transaction.ID...)

@@ -26,7 +26,7 @@ func NewBlockchainService(b *coin.Blockchain, w *wallet.Wallet) BlockchainServic
 
 func (s *BlockchainService) CreateNextBlock() (*coin.Block, *coin.Blockchain, error) {
 	// coinbase transaction is the first transaction included by the miner
-	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(s.Wallet.Crypt, s.Blockchain.GetLastBlock().Index+1)
+	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(s.Wallet.Crypt)
 	transactionPool := make([]repository.Transaction, 0)
 	transactionPool = append(transactionPool, coinbaseTransaction)
 	transactionPool = append(transactionPool, repository.GetTxPoolArray()...)
@@ -55,7 +55,7 @@ func (s *BlockchainService) CreateTx(receiverAddress []byte, amount int) (*repos
 // 2. When a new block is mined, and added to the chain, and uTxOs are updated, current txs might no longer be valid (e.g. the UtxO was used).
 
 //Note: Say there is a pair of txs that are invalid together, this will register the SECOND tx as the invalid one and keep the first.
-func ValidateTxPoolDryRun(blockIndex int, newTx *repository.Transaction) ([][]byte, error) {
+func ValidateTxPoolDryRun(newTx *repository.Transaction) ([][]byte, error) {
 	invalidTxIDs := make([][]byte, 0)
 	var err error
 
@@ -75,11 +75,9 @@ func ValidateTxPoolDryRun(blockIndex int, newTx *repository.Transaction) ([][]by
 		}
 
 		for _, txIn := range tx.TxIns {
-			repository.RemoveUTxOFromSenderCopy(txIn, uTxOSetCopy)
+			repository.RemoveTxOFromUTxOCopy(repository.TxIDType(tx.ID), txIn, uTxOSetCopy)
 		}
-		for _, txO := range tx.TxOuts {
-			repository.AddTxOToReceiverCopy(tx.ID, blockIndex, txO, uTxOSetCopy)
-		}
+		repository.AddTxToUTxOSetCopy(tx, uTxOSetCopy)
 	}
 
 	return invalidTxIDs, err
@@ -88,20 +86,18 @@ func ValidateTxPoolDryRun(blockIndex int, newTx *repository.Transaction) ([][]by
 // commit all block txs. Remove txs from current tx pool that exist in the block.
 // Then further validate if the rest of the entire tx pool is valid and remove the txs that are invalid.
 func CommitBlockTransactions(block coin.Block) error {
-	if err := wallet.AreValidTransactions(block.Transactions, block.Index); err != nil {
+	if err := wallet.AreValidTransactions(block.Transactions); err != nil {
 		return err
 	}
 	for _, tx := range block.Transactions {
 		for _, txIn := range tx.TxIns {
-			repository.RemoveUTxOFromSender(txIn)
+			repository.RemoveTxOFromUTxOSet(repository.TxIDType(tx.ID), txIn)
 		}
-		for _, txO := range tx.TxOuts {
-			repository.AddTxOToReceiver(tx.ID, block.Index, txO)
-		}
+		repository.AddTxToUTxOSet(tx)
 		repository.RemoveTxFromTxPool(tx.ID)
 	}
 
-	if invalidTxIDs, err := ValidateTxPoolDryRun(block.Index, nil); err != nil {
+	if invalidTxIDs, err := ValidateTxPoolDryRun(nil); err != nil {
 		utils.InfoLogger.Println("Left over Tx pool is invalid after committing block. Emptying tx pool")
 		for _, invalidTxID := range invalidTxIDs {
 			repository.RemoveTxFromTxPool(invalidTxID)
@@ -115,10 +111,10 @@ func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockch
 	genesisTransactionPool := make([]repository.Transaction, 0)
 
 	// coinbase transaction is the first transaction included by the miner
-	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(crypt, 0)
+	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(crypt)
 	genesisTransactionPool = append(genesisTransactionPool, coinbaseTransaction)
 
-	repository.AddTxOToReceiver(coinbaseTransaction.ID, 0, coinbaseTransaction.TxOuts[0])
+	repository.AddTxToUTxOSet(coinbaseTransaction)
 
 	blockchain.AddBlock(coin.GenesisBlock(SeedDifficultyLevel, genesisTransactionPool))
 

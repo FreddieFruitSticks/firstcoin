@@ -3,9 +3,10 @@ package repository
 import "fmt"
 
 type Transaction struct {
-	ID        []byte `json:"id"`
-	TxIns     []TxIn `json:"transactionInputs"`
-	TxOuts    []TxO  `json:"transactionOutputs"`
+	ID        []byte `json:"txid"`
+	Locktime  int    `json:"locktime"`
+	TxIns     []TxIn `json:"vin"`
+	TxOuts    []TxO  `json:"vout"`
 	Timestamp int    `json:"timestamp"`
 }
 
