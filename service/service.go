@@ -5,6 +5,7 @@ import (
 	"blockchain/repository"
 	"blockchain/utils"
 	"blockchain/wallet"
+	"encoding/json"
 	"fmt"
 )
 
@@ -26,10 +27,13 @@ func NewBlockchainService(b *coin.Blockchain, w *wallet.Wallet) BlockchainServic
 
 func (s *BlockchainService) CreateNextBlock() (*coin.Block, *coin.Blockchain, error) {
 	// coinbase transaction is the first transaction included by the miner
-	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(s.Wallet.Crypt)
 	transactionPool := make([]repository.Transaction, 0)
+
+	totalFees, txsToInclude := wallet.CalculateTotalTxFees(repository.GetTxPoolArray())
+
+	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(s.Wallet.Crypt, totalFees)
 	transactionPool = append(transactionPool, coinbaseTransaction)
-	transactionPool = append(transactionPool, repository.GetTxPoolArray()...)
+	transactionPool = append(transactionPool, txsToInclude...)
 	block := s.Blockchain.GenerateNextBlock(&transactionPool)
 
 	err := block.IsValidBlock(s.Blockchain.GetLastBlock())
@@ -86,10 +90,18 @@ func ValidateTxPoolDryRun(newTx *repository.Transaction) ([][]byte, error) {
 // commit all block txs. Remove txs from current tx pool that exist in the block.
 // Then further validate if the rest of the entire tx pool is valid and remove the txs that are invalid.
 func CommitBlockTransactions(block coin.Block) error {
-	if err := wallet.AreValidTransactions(block.Transactions); err != nil {
+	// we copy the block to avoid any pointer copying fails, such as slice pointers. Updating the slice of TxOs in UTxOSet,
+	// updated the slice in the blockchain
+	copyBlock, err := CopyBlock(block)
+	if err != nil {
 		return err
 	}
-	for _, tx := range block.Transactions {
+
+	if err := wallet.AreValidTransactions(copyBlock.Transactions); err != nil {
+		return err
+	}
+
+	for _, tx := range copyBlock.Transactions {
 		for _, txIn := range tx.TxIns {
 			repository.RemoveTxOFromUTxOSet(repository.TxIDType(tx.ID), txIn)
 		}
@@ -111,7 +123,7 @@ func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockch
 	genesisTransactionPool := make([]repository.Transaction, 0)
 
 	// coinbase transaction is the first transaction included by the miner
-	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(crypt)
+	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(crypt, 0)
 	genesisTransactionPool = append(genesisTransactionPool, coinbaseTransaction)
 
 	repository.AddTxToUTxOSet(coinbaseTransaction)
@@ -122,8 +134,19 @@ func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockch
 }
 
 func (s *BlockchainService) AddTxToTxPool(tx repository.Transaction) bool {
-
 	repository.AddTxToTxPool(tx)
 
 	return true
+}
+
+func CopyBlock(bl coin.Block) (coin.Block, error) {
+	copyBlock := coin.Block{}
+
+	bytes, err := json.Marshal(bl)
+	if err != nil {
+		return coin.Block{}, err
+	}
+
+	json.Unmarshal(bytes, &copyBlock)
+	return copyBlock, nil
 }

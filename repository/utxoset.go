@@ -46,16 +46,7 @@ func GetUserLedger(publicKey []byte) UserWalletType {
 }
 
 func AddTxToUTxOSet(tx Transaction) {
-	txCopy := Transaction{
-		ID:        tx.ID,
-		Locktime:  tx.Locktime,
-		Timestamp: tx.Timestamp,
-		TxIns:     tx.TxIns,
-		TxOuts:    tx.TxOuts,
-	}
-	// bytes, _ := json.Marshal(tx)
-	// json.Unmarshal(bytes, &txCopy)
-	AddTxSpecifiedToUTxOSet(txCopy, uTxOSet)
+	AddTxSpecifiedToUTxOSet(tx, uTxOSet)
 }
 
 func AddTxToUTxOSetCopy(tx Transaction, uTxOSetCopy UTxOSetType) {

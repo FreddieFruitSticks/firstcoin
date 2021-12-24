@@ -24,7 +24,7 @@ func TestUpdateUTxOSet(t *testing.T) {
 		blockchain := coin.NewBlockchain(blocks)
 		*blockchain, _ = service.CreateGenesisBlockchain(*senderCrypt, *blockchain)
 
-		coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(*senderCrypt)
+		coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(*senderCrypt, 0)
 
 		tx, _, err := senderWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
 		if err != nil {
@@ -51,8 +51,11 @@ func TestUpdateUTxOSet(t *testing.T) {
 			t.Fatalf("Length of uTxOuts incorrect. Got: %d. Want:%d", len(txOutsOfReceived), 2)
 		}
 
-		if txOutsOfReceived[0].Value != 5 || txOutsOfReceived[1].Value != 5 {
-			t.Fatalf("Length of uTxOuts incorrect. Got: %d. Want:%d", len(txOutsOfReceived), 2)
+		paidAmount := txOutsOfReceived[0].Value
+		change := txOutsOfReceived[1].Value
+
+		if paidAmount != amount || change != wallet.COINBASE_TRANSACTION_AMOUNT-amount-wallet.TRANSACTION_FEE {
+			t.Fatalf("txO received incorrect. Got: %d. Want:%d", txOutsOfReceived[0].Value, wallet.COINBASE_TRANSACTION_AMOUNT-amount-wallet.TRANSACTION_FEE)
 		}
 	})
 }

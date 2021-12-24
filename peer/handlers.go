@@ -346,18 +346,7 @@ func (c *CoinServerHandler) mineBlock(r *http.Request) (*HTTPResponse, *HTTPErro
 		// TODO: This needs to be added to a fork (need to implement forks first). It is not a given that the block should be accepted
 		//just because it has valid POW, and "fits" on to the chain.
 		c.BlockchainService.Blockchain.AddBlock(block)
-
-		// we copy the block to avoid any pointer copying falils, such as slice pointers. Updating the slice of TxOs in UTxOSet,
-		// updated the slice in the blockchain
-		copyBlock, err := copyBlock(block)
-		if err != nil {
-			return nil, &HTTPError{
-				Code:    http.StatusInternalServerError,
-				Message: fmt.Sprintf("Could not update blockchain. error: %s", err.Error()),
-			}
-		}
-
-		service.CommitBlockTransactions(copyBlock)
+		service.CommitBlockTransactions(block)
 
 		// this is relaying an accepted block to the network. Right now it simply sends to all the peers. The node that originally sent
 		// the block only adds it block to its own chain if it receives it back from the network.
@@ -439,16 +428,4 @@ type HostName struct {
 type CreateTransactionControl struct {
 	Address []byte `json:"address"`
 	Amount  int    `json:"amount"`
-}
-
-func copyBlock(bl coin.Block) (coin.Block, error) {
-	copyBlock := coin.Block{}
-
-	bytes, err := json.Marshal(bl)
-	if err != nil {
-		return coin.Block{}, err
-	}
-
-	json.Unmarshal(bytes, &copyBlock)
-	return copyBlock, nil
 }

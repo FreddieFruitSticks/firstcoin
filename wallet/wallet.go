@@ -10,7 +10,8 @@ import (
 	"time"
 )
 
-const COINBASE_TRANSACTION_AMOUNT = 10
+const COINBASE_TRANSACTION_AMOUNT = 100
+const TRANSACTION_FEE = 1
 
 type Wallet struct {
 	Crypt Cryptographic
@@ -67,13 +68,13 @@ func (w *Wallet) CreateTransaction(receiverAddress []byte, amount int) (*reposit
 	return &transaction, now, nil
 }
 
-func CreateCoinbaseTransaction(crypt Cryptographic) (repository.Transaction, int) {
+func CreateCoinbaseTransaction(crypt Cryptographic, txFees int) (repository.Transaction, int) {
 	// First create the transaction with TxIns and TxOuts - tx id and txIn signature are not included yet
 	txIns := make([]repository.TxIn, 0)
 	txOuts := make([]repository.TxO, 0)
 
 	txOut := repository.TxO{
-		Value:        COINBASE_TRANSACTION_AMOUNT,
+		Value:        COINBASE_TRANSACTION_AMOUNT + txFees,
 		ScriptPubKey: crypt.PublicKey,
 	}
 	txOuts = append(txOuts, txOut)
@@ -118,19 +119,19 @@ type prettyTxO struct {
 	Amount  int
 }
 
-func AreValidTransactions(transactions []repository.Transaction) error {
-	if len(transactions) == 0 {
+func AreValidTransactions(txs []repository.Transaction) error {
+	if len(txs) == 0 {
 		return fmt.Errorf("Invalid transactions. Cant have empty transactions")
 	}
 
 	// first transaction in the list is always the coinbase transaction
-	coinbaseTransaction := transactions[0]
+	coinbaseTransaction := txs[0]
 
-	if err := IsValidCoinbaseTransaction(coinbaseTransaction); err != nil {
+	if err := IsValidCoinbaseTransaction(coinbaseTransaction, txs[1:]); err != nil {
 		return err
 	}
 
-	for _, transaction := range transactions[1:] {
+	for _, transaction := range txs[1:] {
 		if err := IsValidTransaction(transaction); err != nil {
 			return err
 		}
@@ -172,17 +173,54 @@ func IsValidTransactionCopy(tx repository.Transaction, uTxOSet repository.UTxOSe
 	return nil
 }
 
-func IsValidCoinbaseTransaction(transaction repository.Transaction) error {
-	if len(transaction.TxOuts) != 1 {
+func CalculateTotalTxFees(txPool []repository.Transaction) (int, []repository.Transaction) {
+	totalFees := 0
+	uTxOSet := repository.GetEntireUTxOSet()
+	txPoolToInclude := make([]repository.Transaction, 0)
+
+	for _, tx := range txPool {
+		totalInput, totalOutput := CalculateFeeForTx(tx, uTxOSet)
+
+		if totalInput-totalOutput >= TRANSACTION_FEE {
+			txPoolToInclude = append(txPoolToInclude, tx)
+			totalFees += totalInput - totalOutput
+		}
+	}
+
+	return totalFees, txPoolToInclude
+}
+
+func CalculateFeeForTx(tx repository.Transaction, uTxOSet repository.UTxOSetType) (int, int) {
+	totalInput := 0
+	totalOutput := 0
+
+	for _, input := range tx.TxIns {
+		tx := uTxOSet[repository.TxIDType(input.TxID)]
+		inputAmount := tx.TxOuts[input.TxOIndex].Value
+		totalInput += inputAmount
+	}
+
+	for _, output := range tx.TxOuts {
+		totalOutput += output.Value
+	}
+
+	return totalInput, totalOutput
+}
+
+func IsValidCoinbaseTransaction(tx repository.Transaction, otherTxs []repository.Transaction) error {
+	if len(tx.TxOuts) != 1 {
 		return fmt.Errorf("Invalid coinbase transaction txOuts length > 0")
 	}
 
-	if transaction.TxOuts[0].Value != COINBASE_TRANSACTION_AMOUNT {
-		return fmt.Errorf("Invalid coinbase transaction amount != COINBASE_TRANSACTION_AMOUNT")
+	fees := tx.TxOuts[0].Value - COINBASE_TRANSACTION_AMOUNT
+	totalFees, _ := CalculateTotalTxFees(otherTxs)
+
+	if fees != totalFees {
+		return fmt.Errorf("Invalid coinbase transaction. Fees are incorrect")
 	}
 
-	tID := GenerateTransactionID(transaction)
-	if !reflect.DeepEqual(tID, transaction.ID) {
+	tID := GenerateTransactionID(tx)
+	if !reflect.DeepEqual(tID, tx.ID) {
 		return fmt.Errorf("Invalid coinbase transaction. TransactionId is invalid")
 	}
 
@@ -303,7 +341,7 @@ func (w *Wallet) FindUTxOs(amount int) ([]TxIDIndexPair, int, error) {
 
 	for _, tx := range spenderLedger {
 		for index, uTxO := range tx.TxOuts {
-			if totalAmount < amount && !isUTxOInTxPool(tx.ID) && uTxOBelongsToSpender(uTxO, w.Crypt.PublicKey) {
+			if totalAmount < amount+TRANSACTION_FEE && !isUTxOInTxPool(tx.ID) && uTxOBelongsToSpender(uTxO, w.Crypt.PublicKey) {
 				uTxOs = append(uTxOs, TxIDIndexPair{
 					TxID:     tx.ID,
 					TxOIndex: index,
@@ -313,7 +351,7 @@ func (w *Wallet) FindUTxOs(amount int) ([]TxIDIndexPair, int, error) {
 
 			}
 
-			if totalAmount >= amount {
+			if totalAmount >= amount+TRANSACTION_FEE {
 				return uTxOs, totalAmount, nil
 			}
 		}
@@ -323,6 +361,10 @@ func (w *Wallet) FindUTxOs(amount int) ([]TxIDIndexPair, int, error) {
 		return nil, totalAmount, fmt.Errorf("insufficient funds or no available uTxOs")
 	}
 
+	if totalAmount < amount+TRANSACTION_FEE {
+		return nil, totalAmount, fmt.Errorf("insufficient funds to include the tx fee of 1 coin")
+	}
+
 	return uTxOs, totalAmount, nil
 }
 
@@ -330,7 +372,7 @@ func uTxOBelongsToSpender(uTxO repository.TxO, spenderPublicKey []byte) bool {
 	return reflect.DeepEqual(uTxO.ScriptPubKey, spenderPublicKey)
 }
 
-// can only send to one receiver, and can get change
+// can only send to one receiver, and can get change. Bitcoin protocol allows for multiple receivers and senders in one tx. Potential TODO.
 func (w *Wallet) GetTxOs(amount int, receiverAddress []byte, txIns []repository.TxIn) ([]repository.TxO, error) {
 	txOs := make([]repository.TxO, 0)
 
@@ -348,8 +390,8 @@ func (w *Wallet) GetTxOs(amount int, receiverAddress []byte, txIns []repository.
 
 	change := 0
 	// deduct the difference between the total amount and the amount required, and add that as a repository.TxO to go back to the spender (as change)
-	if totalAmount > amount {
-		change = totalAmount - amount
+	if totalAmount > amount+TRANSACTION_FEE {
+		change = totalAmount - (amount + TRANSACTION_FEE)
 		changeTxO := repository.TxO{
 			ScriptPubKey: w.Crypt.PublicKey,
 			Value:        change,
@@ -370,7 +412,7 @@ func (w *Wallet) validateTxInsCanServiceAmount(txIns []repository.TxIn, amount i
 		totalAmount += tx.TxOuts[txIn.TxOIndex].Value
 	}
 
-	return totalAmount >= amount, totalAmount
+	return totalAmount >= amount+TRANSACTION_FEE, totalAmount
 }
 
 func isUTxOInTxPool(txID []byte) bool {

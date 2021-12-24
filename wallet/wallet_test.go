@@ -13,7 +13,7 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 		crypt := wallet.NewCryptographic()
 		crypt.GenerateKeyPair()
 
-		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*crypt)
+		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*crypt, 0)
 
 		txIns := make([]repository.TxIn, 0)
 		txOuts := make([]repository.TxO, 0)
@@ -34,7 +34,7 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 		txID := wallet.GenerateTransactionID(expectedTx)
 		expectedTx.ID = txID
 
-		if err := wallet.IsValidCoinbaseTransaction(coinbaseTx); err != nil {
+		if err := wallet.IsValidCoinbaseTransaction(coinbaseTx, []repository.Transaction{}); err != nil {
 			t.Fatalf("coinbase Tx not valid %s", err.Error())
 		}
 
@@ -58,7 +58,7 @@ func TestCreateTransaction(t *testing.T) {
 
 		amount := 8
 
-		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*senderCrypt)
+		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*senderCrypt, 0)
 		repository.AddTxToUTxOSet(coinbaseTx)
 
 		txIns := make([]repository.TxIn, 0)
@@ -129,9 +129,9 @@ func TestCreateTransaction(t *testing.T) {
 		receiverCrypt := wallet.NewCryptographic()
 		receiverCrypt.GenerateKeyPair()
 
-		amount := 11
+		amount := wallet.COINBASE_TRANSACTION_AMOUNT + 1
 
-		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*senderCrypt)
+		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*senderCrypt, 0)
 		repository.AddTxToUTxOSet(coinbaseTx)
 
 		txIns := make([]repository.TxIn, 0)
@@ -173,7 +173,7 @@ func TestCreateTransaction(t *testing.T) {
 
 		amount := 8
 
-		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*senderCrypt)
+		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*senderCrypt, 0)
 		repository.AddTxToUTxOSet(coinbaseTx)
 
 		txIns := make([]repository.TxIn, 0)
@@ -224,7 +224,7 @@ func TestCreateTransaction(t *testing.T) {
 }
 
 func TestFindUTxOs(test *testing.T) {
-	test.Run("UTxOs can service the amount", func(t *testing.T) {
+	test.Run("UTxOs can service the amount and fee", func(t *testing.T) {
 		crypt := wallet.NewCryptographic()
 		crypt.GenerateKeyPair()
 		senderWallet := wallet.NewWallet(*crypt)
@@ -236,11 +236,11 @@ func TestFindUTxOs(test *testing.T) {
 		crypt3 := wallet.NewCryptographic()
 		crypt3.GenerateKeyPair()
 
-		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*crypt)
+		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*crypt, 0)
 		repository.AddTxToUTxOSet(coinbaseTx)
 
 		tx, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 5)
-		tx2, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 5)
+		tx2, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 6)
 		repository.AddTxToUTxOSet(*tx)
 		repository.AddTxToUTxOSet(*tx2)
 
@@ -282,7 +282,7 @@ func TestFindUTxOs(test *testing.T) {
 		crypt2.GenerateKeyPair()
 		senderReceiverWallet := wallet.NewWallet(*crypt2)
 
-		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*crypt)
+		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*crypt, 0)
 		repository.AddTxToUTxOSet(coinbaseTx)
 
 		tx, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 5)
@@ -295,6 +295,29 @@ func TestFindUTxOs(test *testing.T) {
 			t.Fatalf("incorrect error type, expected insufficient funds, got: %+v", err)
 		}
 	})
+
+	test.Run("UTxOs cannot service the amount - not enough for service fee", func(t *testing.T) {
+		crypt := wallet.NewCryptographic()
+		crypt.GenerateKeyPair()
+		senderWallet := wallet.NewWallet(*crypt)
+
+		crypt2 := wallet.NewCryptographic()
+		crypt2.GenerateKeyPair()
+		senderReceiverWallet := wallet.NewWallet(*crypt2)
+
+		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*crypt, 0)
+		repository.AddTxToUTxOSet(coinbaseTx)
+
+		tx, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 5)
+		tx2, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 5)
+		repository.AddTxToUTxOSet(*tx)
+		repository.AddTxToUTxOSet(*tx2)
+
+		_, _, err := senderReceiverWallet.FindUTxOs(10)
+		if err == nil || (err != nil && err.Error() != "insufficient funds to include the tx fee of 1 coin") {
+			t.Fatalf("incorrect error type, expected insufficient funds, got: %+v", err)
+		}
+	})
 }
 
 func TestGetTxOs(test *testing.T) {
@@ -302,6 +325,8 @@ func TestGetTxOs(test *testing.T) {
 	crypt.GenerateKeyPair()
 
 	test.Run("UTxOs can service the amount", func(t *testing.T) {
+		amount := 6
+
 		crypt := wallet.NewCryptographic()
 		crypt.GenerateKeyPair()
 		senderWallet := wallet.NewWallet(*crypt)
@@ -309,7 +334,7 @@ func TestGetTxOs(test *testing.T) {
 		crypt2 := wallet.NewCryptographic()
 		crypt2.GenerateKeyPair()
 
-		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*crypt)
+		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*crypt, 0)
 		repository.AddTxToUTxOSet(coinbaseTx)
 
 		tx, _, _ := senderWallet.CreateTransaction(crypt2.PublicKey, 6)
@@ -321,13 +346,13 @@ func TestGetTxOs(test *testing.T) {
 		})
 
 		expectedTxO1 := repository.TxO{
-			ScriptPubKey: crypt2.PublicKey,
-			Value:        6,
+			ScriptPubKey: crypt.PublicKey,
+			Value:        wallet.COINBASE_TRANSACTION_AMOUNT - amount - wallet.TRANSACTION_FEE,
 		}
 
 		expectedTxO2 := repository.TxO{
-			ScriptPubKey: crypt.PublicKey,
-			Value:        4,
+			ScriptPubKey: crypt2.PublicKey,
+			Value:        amount,
 		}
 
 		if !reflect.DeepEqual(txOs[0], expectedTxO1) {
