@@ -22,13 +22,12 @@ func NewCryptographic() *Cryptographic {
 	return &Cryptographic{}
 }
 
-// TODO: Bitcoin runs on ECDSA not RSA.
 func (c *Cryptographic) GenerateKeyPair() {
 	curve := elliptic.P256()
 	// generate key
 	privatekey, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
-		fmt.Printf("Cannot generate RSA key\n")
+		fmt.Printf("Cannot generate ECDSA key\n")
 		os.Exit(1)
 	}
 
