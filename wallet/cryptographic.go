@@ -1,12 +1,11 @@
 package wallet
 
 import (
-	"blockchain/utils"
 	"bytes"
-	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/md5"
 	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -16,8 +15,8 @@ import (
 type Cryptographic struct {
 	PublicKey        []byte
 	PrivateKey       []byte
-	PrivateKeyObject *rsa.PrivateKey
-	PublicKeyObject  *rsa.PublicKey
+	PrivateKeyObject *ecdsa.PrivateKey
+	PublicKeyObject  *ecdsa.PublicKey
 }
 
 func NewCryptographic() *Cryptographic {
@@ -26,8 +25,9 @@ func NewCryptographic() *Cryptographic {
 
 // TODO: Bitcoin runs on ECDSA not RSA.
 func (c *Cryptographic) GenerateKeyPair() {
+	curve := elliptic.P256()
 	// generate key
-	privatekey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privatekey, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
 		fmt.Printf("Cannot generate RSA key\n")
 		os.Exit(1)
@@ -37,9 +37,13 @@ func (c *Cryptographic) GenerateKeyPair() {
 	c.PublicKeyObject = publickey
 
 	// private key
-	var privateKeyBytes []byte = x509.MarshalPKCS1PrivateKey(privatekey)
+	privateKeyBytes, err := x509.MarshalECPrivateKey(privatekey)
+	if err != nil {
+		panic(err)
+	}
+
 	privateKeyBlock := &pem.Block{
-		Type:  "RSA PRIVATE KEY",
+		Type:  "EC PRIVATE KEY",
 		Bytes: privateKeyBytes,
 	}
 
@@ -55,14 +59,20 @@ func (c *Cryptographic) GenerateKeyPair() {
 	sk := make([]byte, 2048)
 
 	_, err = buffer.Read(sk)
-	utils.CheckError(err)
+	if err != nil {
+		panic(err)
+	}
 
 	c.PrivateKey = sk
 
 	buffer.Reset()
 
 	// public key
-	publicKeyBytes := x509.MarshalPKCS1PublicKey(publickey)
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publickey)
+	if err != nil {
+		panic(err)
+	}
+
 	publicKeyBlock := &pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: publicKeyBytes,
@@ -77,7 +87,9 @@ func (c *Cryptographic) GenerateKeyPair() {
 	pk := make([]byte, 418)
 
 	_, err = buffer.Read(pk)
-	utils.CheckError(err)
+	if err != nil {
+		panic(err)
+	}
 
 	c.PublicKey = pk
 }
@@ -85,10 +97,7 @@ func (c *Cryptographic) GenerateKeyPair() {
 func (c *Cryptographic) GenerateSignature(message []byte) []byte {
 	msgHashSum := hashMessage(message)
 
-	// In order to generate the signature, we provide a random number generator,
-	// our private key, the hashing algorithm that we used, and the hash sum
-	// of our message
-	signature, err := rsa.SignPSS(rand.Reader, c.PrivateKeyObject, crypto.SHA256, msgHashSum, nil)
+	signature, err := ecdsa.SignASN1(rand.Reader, c.PrivateKeyObject, msgHashSum)
 	if err != nil {
 		panic(err)
 	}
@@ -102,23 +111,25 @@ func VerifySignature(signature []byte, publicKey []byte, message []byte) error {
 		return fmt.Errorf("error verifying signature: could not find pemBlock for public key")
 	}
 
-	pk, err := x509.ParsePKCS1PublicKey(pemBlock.Bytes)
+	genericPublicKey, err := x509.ParsePKIXPublicKey(pemBlock.Bytes)
 	if err != nil {
 		return fmt.Errorf("error verifying signature: could not parse public key %+v", err)
 	}
 
+	pubKey := genericPublicKey.(*ecdsa.PublicKey)
+
 	msgHashSum := hashMessage(message)
 
-	err = rsa.VerifyPSS(pk, crypto.SHA256, msgHashSum, signature, nil)
-	if err != nil {
-		return fmt.Errorf("%+v", err)
+	verify := ecdsa.VerifyASN1(pubKey, msgHashSum, signature)
+	if !verify {
+		return fmt.Errorf("invalid signature")
 	}
 
 	return nil
 }
 
 func hashMessage(msg []byte) []byte {
-	msgHash := sha256.New()
+	msgHash := md5.New()
 	_, err := msgHash.Write(msg)
 	if err != nil {
 		panic(err)
