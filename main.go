@@ -35,7 +35,7 @@ func main() {
 	crypt := wallet.NewCryptographic()
 	crypt.GenerateKeyPair()
 
-	fmt.Println(string(repository.Base64Encode(crypt.PublicKey)))
+	fmt.Println(string(repository.Base64Encode(crypt.FirstcoinAddress)))
 
 	userWallet := wallet.NewWallet(*crypt)
 

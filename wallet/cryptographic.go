@@ -5,10 +5,25 @@ import (
 	"crypto/elliptic"
 	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"os"
+	"reflect"
+	"strings"
+
+	"github.com/btcsuite/btcutil/base58"
+	"golang.org/x/crypto/ripemd160"
+)
+
+type SigHash string
+type Base58CheckVersionPrefix byte
+
+const (
+	sigHashAll SigHash = "ALL"
+
+	bitcoinAddressVersionPrefix Base58CheckVersionPrefix = 0
 )
 
 type Cryptographic struct {
@@ -16,6 +31,7 @@ type Cryptographic struct {
 	PrivateKey       []byte
 	PrivateKeyObject *ecdsa.PrivateKey
 	PublicKeyObject  *ecdsa.PublicKey
+	FirstcoinAddress []byte
 }
 
 func NewCryptographic() *Cryptographic {
@@ -63,6 +79,10 @@ func (c *Cryptographic) GenerateKeyPair() {
 
 	pemEncodedPubKey := pem.EncodeToMemory(publicKeyBlock)
 	c.PublicKey = pemEncodedPubKey
+
+	hash160 := ConvertPublicKeyToHash160(pemEncodedPubKey)
+
+	c.FirstcoinAddress = []byte(base58.CheckEncode(hash160, 0))
 }
 
 func (c *Cryptographic) GenerateSignature(message []byte) []byte {
@@ -76,7 +96,44 @@ func (c *Cryptographic) GenerateSignature(message []byte) []byte {
 	return signature
 }
 
-func VerifySignature(signature []byte, publicKey []byte, message []byte) error {
+func splitScriptSig(scriptSig []byte) ([]byte, []byte, error) {
+	split := strings.Split(string(scriptSig), fmt.Sprintf("[%s]", sigHashAll))
+	if len(split) != 2 {
+		return nil, nil, fmt.Errorf("invalid format of scriptSig")
+	}
+
+	return []byte(split[0]), []byte(split[1]), nil
+}
+
+func verifyPublicKeyIsAddress(address, publicKey []byte) error {
+	hash160PublicKey := ConvertPublicKeyToHash160(publicKey)
+
+	result, version, err := base58.CheckDecode(string(address))
+	if err != nil {
+		return err
+	}
+
+	if version != byte(bitcoinAddressVersionPrefix) {
+		return fmt.Errorf("Unsupported base58 check version prefix %d", version)
+	}
+
+	if !reflect.DeepEqual(result, hash160PublicKey) {
+		return fmt.Errorf("sigScript does not unlock scriptPubKey")
+	}
+
+	return nil
+}
+
+func VerifySignature(scriptSig []byte, address []byte, message []byte) error {
+	signature, publicKey, err := splitScriptSig(scriptSig)
+	if err != nil {
+		return err
+	}
+
+	if err := verifyPublicKeyIsAddress(address, publicKey); err != nil {
+		return err
+	}
+
 	pemBlock, _ := pem.Decode(publicKey)
 	if pemBlock == nil {
 		return fmt.Errorf("error verifying signature: could not find pemBlock for public key")
@@ -94,7 +151,7 @@ func VerifySignature(signature []byte, publicKey []byte, message []byte) error {
 
 	msgHashSum := hashMessage(message)
 
-	verify := ecdsa.VerifyASN1(pubKey, msgHashSum, signature)
+	verify := ecdsa.VerifyASN1(pubKey, msgHashSum, []byte(signature))
 	if !verify {
 		return fmt.Errorf("invalid signature")
 	}
@@ -110,4 +167,18 @@ func hashMessage(msg []byte) []byte {
 	}
 
 	return msgHash.Sum(nil)
+}
+
+func ConvertPublicKeyToHash160(pubKey []byte) []byte {
+	sha := sha256.New()
+	sha.Write(pubKey)
+
+	hashedMessage := sha.Sum(nil)
+
+	ripe := ripemd160.New()
+	ripe.Write(hashedMessage)
+
+	firstcoinAddress := ripe.Sum(nil)
+
+	return firstcoinAddress
 }

@@ -58,14 +58,24 @@ func (w *Wallet) CreateTransaction(receiverAddress []byte, amount int) (*reposit
 	transaction.ID = txID
 
 	// tx input signature is the tx id signed by the spender of coins
-	signature := w.Crypt.GenerateSignature(txID)
+	sigScript := w.GenerateTxSigScript(txID)
 
 	// sign all txIns from same sender.
 	for i := 0; i < len(transaction.TxIns); i++ {
-		transaction.TxIns[i].ScriptSignature = signature
+		transaction.TxIns[i].ScriptSignature = sigScript
 	}
 
 	return &transaction, now, nil
+}
+
+func (w *Wallet) GenerateTxSigScript(txID []byte) []byte {
+	signature := w.Crypt.GenerateSignature(txID)
+	publicKey := w.Crypt.PublicKey
+
+	sigScript := append(signature, []byte(fmt.Sprintf("[%s]", sigHashAll))...)
+	sigScript = append(sigScript, publicKey...)
+
+	return sigScript
 }
 
 func CreateCoinbaseTransaction(crypt Cryptographic, txFees int) (repository.Transaction, int) {
@@ -75,7 +85,7 @@ func CreateCoinbaseTransaction(crypt Cryptographic, txFees int) (repository.Tran
 
 	txOut := repository.TxO{
 		Value:        COINBASE_TRANSACTION_AMOUNT + txFees,
-		ScriptPubKey: crypt.PublicKey,
+		ScriptPubKey: crypt.FirstcoinAddress,
 	}
 	txOuts = append(txOuts, txOut)
 
@@ -334,14 +344,14 @@ type TxIDIndexPair struct {
 // that is not already included in the txPool. If the tx is in the txPool, we will alter the txOs and the index will not be correct for
 // the next txIn - TODO: think of something smarter
 func (w *Wallet) FindUTxOs(amount int) ([]TxIDIndexPair, int, error) {
-	spenderLedger := repository.GetUserLedger(w.Crypt.PublicKey)
+	spenderLedger := repository.GetUserLedger(w.Crypt.FirstcoinAddress)
 	uTxOs := make([]TxIDIndexPair, 0)
 
 	totalAmount := 0
 
 	for _, tx := range spenderLedger {
 		for index, uTxO := range tx.TxOuts {
-			if totalAmount < amount+TRANSACTION_FEE && !isUTxOInTxPool(tx.ID) && uTxOBelongsToSpender(uTxO, w.Crypt.PublicKey) {
+			if totalAmount < amount+TRANSACTION_FEE && !isUTxOInTxPool(tx.ID) && uTxOBelongsToSpender(uTxO, w.Crypt.FirstcoinAddress) {
 				uTxOs = append(uTxOs, TxIDIndexPair{
 					TxID:     tx.ID,
 					TxOIndex: index,
@@ -393,7 +403,7 @@ func (w *Wallet) GetTxOs(amount int, receiverAddress []byte, txIns []repository.
 	if totalAmount > amount+TRANSACTION_FEE {
 		change = totalAmount - (amount + TRANSACTION_FEE)
 		changeTxO := repository.TxO{
-			ScriptPubKey: w.Crypt.PublicKey,
+			ScriptPubKey: w.Crypt.FirstcoinAddress,
 			Value:        change,
 		}
 
@@ -407,7 +417,7 @@ func (w *Wallet) validateTxInsCanServiceAmount(txIns []repository.TxIn, amount i
 	totalAmount := 0
 
 	for _, txIn := range txIns {
-		spenderTxs := repository.GetUserLedger(w.Crypt.PublicKey)
+		spenderTxs := repository.GetUserLedger(w.Crypt.FirstcoinAddress)
 		tx := spenderTxs[repository.TxIDType(txIn.TxID)]
 		totalAmount += tx.TxOuts[txIn.TxOIndex].Value
 	}

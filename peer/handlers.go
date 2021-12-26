@@ -244,16 +244,16 @@ func (c *CoinServerHandler) getHosts(r *http.Request) (*HTTPResponse, *HTTPError
 
 // This gets this host's publicKey, and total amount.
 func (c *CoinServerHandler) getHostDetails(r *http.Request) (*HTTPResponse, *HTTPError) {
-	publicKey := c.BlockchainService.Wallet.Crypt.PublicKey
+	address := c.BlockchainService.Wallet.Crypt.FirstcoinAddress
 
-	totalAmount := wallet.GetTotalAmount(publicKey)
+	totalAmount := wallet.GetTotalAmount(address)
 
 	switch r.Method {
 	case "GET":
 		return &HTTPResponse{
 			StatusCode: http.StatusOK,
 			Body: Details{
-				PublicKey:   publicKey,
+				Address:     address,
 				TotalAmount: totalAmount,
 			},
 		}, nil
@@ -266,7 +266,7 @@ func (c *CoinServerHandler) getHostDetails(r *http.Request) (*HTTPResponse, *HTT
 }
 
 type Details struct {
-	PublicKey   []byte `json:"publicKey"`
+	Address     []byte `json:"address"`
 	TotalAmount int    `json:"totalAmount"`
 }
 
