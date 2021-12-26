@@ -8,5 +8,6 @@ Some features and limitations:
 2. The only script is pay-to-public-key-hash
 3. Transaction fees are fixed, and are not variable (e.g. not calculated based on bitsize of transaction).
 4. Transaction serialisation is not explicit and transaction size limitations are not adhered to.
+5. The implementation of the version prefix in the base58Check encoding only supports bitcoin addresses
 
 (more features and limitations to follow)
