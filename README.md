@@ -9,5 +9,6 @@ Some features and limitations:
 3. Transaction fees are fixed, and are not variable (e.g. not calculated based on bitsize of transaction).
 4. Transaction serialisation is not explicit and transaction size limitations are not adhered to.
 5. The implementation of the version prefix in the base58Check encoding only supports bitcoin addresses
+6. The wallet is a single randomly generated bitcoin address
 
 (more features and limitations to follow)
