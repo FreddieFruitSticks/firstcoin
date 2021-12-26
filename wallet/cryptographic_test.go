@@ -9,11 +9,12 @@ func TestVerify(t *testing.T) {
 	crypt := wallet.NewCryptographic()
 	crypt.GenerateKeyPair()
 
+	w := wallet.NewWallet(*crypt)
 	message := []byte{12, 23}
 
-	signature := crypt.GenerateSignature(message)
+	scriptSig := w.GenerateTxSigScript(message)
 
-	if err := wallet.VerifySignature(signature, crypt.PublicKey, message); err != nil {
+	if err := wallet.VerifySignature(scriptSig, crypt.FirstcoinAddress, message); err != nil {
 		t.Fatalf("signature not confirmed: %+v", err)
 	}
 }

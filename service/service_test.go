@@ -24,7 +24,7 @@ func TestUpdateUTxOSet(t *testing.T) {
 		blockchain := coin.NewBlockchain(blocks)
 		*blockchain, _ = service.CreateGenesisBlockchain(*senderCrypt, *blockchain)
 
-		coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(*senderCrypt, 0)
+		coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(*senderCrypt, 1)
 
 		tx, _, err := senderWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
 		if err != nil {
