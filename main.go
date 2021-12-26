@@ -3,7 +3,6 @@ package main
 import (
 	"blockchain/coin"
 	"blockchain/peer"
-	"blockchain/repository"
 	"blockchain/service"
 	"blockchain/utils"
 	"blockchain/wallet"
@@ -35,7 +34,7 @@ func main() {
 	crypt := wallet.NewCryptographic()
 	crypt.GenerateKeyPair()
 
-	fmt.Println(string(repository.Base64Encode(crypt.FirstcoinAddress)))
+	fmt.Println(string(string(crypt.FirstcoinAddress)))
 
 	userWallet := wallet.NewWallet(*crypt)
 

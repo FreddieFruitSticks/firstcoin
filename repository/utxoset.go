@@ -85,7 +85,7 @@ func (t TxIn) String() string {
 }
 
 func (t TxO) String() string {
-	return fmt.Sprintf("{\nAddress: %s\nAmount: %+v\n}\n", Base64Encode(t.ScriptPubKey), t.Value)
+	return fmt.Sprintf("{\nAddress: %s\nAmount: %+v\n}\n", string(t.ScriptPubKey), t.Value)
 }
 
 func Base64Encode(message []byte) []byte {
