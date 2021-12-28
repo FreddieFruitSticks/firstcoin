@@ -49,120 +49,120 @@ func TestCreateCoinbaseTransaction(t *testing.T) {
 }
 
 func TestCreateTransaction(t *testing.T) {
-	// t.Run("validate successful transaction - 2 inputs with change", func(t *testing.T) {
-	// 	senderCrypt := wallet.NewCryptographic()
-	// 	senderCrypt.GenerateKeyPair()
+	t.Run("validate successful transaction - 2 inputs with change", func(t *testing.T) {
+		senderCrypt := wallet.NewCryptographic()
+		senderCrypt.GenerateKeyPair()
 
-	// 	receiverCrypt := wallet.NewCryptographic()
-	// 	receiverCrypt.GenerateKeyPair()
+		receiverCrypt := wallet.NewCryptographic()
+		receiverCrypt.GenerateKeyPair()
 
-	// 	amount := 8
+		amount := 8
 
-	// 	coinbaseTx, now := wallet.CreateCoinbaseTransaction(*senderCrypt, 0)
-	// 	repository.AddTxToUTxOSet(coinbaseTx)
+		coinbaseTx, now := wallet.CreateCoinbaseTransaction(*senderCrypt, 0)
+		repository.AddTxToUTxOSet(coinbaseTx)
 
-	// 	txIns := make([]repository.TxIn, 0)
-	// 	txOuts := make([]repository.TxO, 0)
+		txIns := make([]repository.TxIn, 0)
+		txOuts := make([]repository.TxO, 0)
 
-	// 	txIn := repository.TxIn{
-	// 		TxID:            coinbaseTx.ID,
-	// 		TxOIndex:        0,
-	// 		ScriptSignature: []byte{},
-	// 	}
+		txIn := repository.TxIn{
+			TxID:            coinbaseTx.ID,
+			TxOIndex:        0,
+			ScriptSignature: []byte{},
+		}
 
-	// 	txIns = append(txIns, txIn)
+		txIns = append(txIns, txIn)
 
-	// 	txOutReceiver := repository.TxO{
-	// 		ScriptPubKey: receiverCrypt.FirstcoinAddress,
-	// 		Value:        amount,
-	// 	}
-	// 	txOutSenderChange := repository.TxO{
-	// 		ScriptPubKey: senderCrypt.FirstcoinAddress,
-	// 		Value:        wallet.COINBASE_TRANSACTION_AMOUNT - amount,
-	// 	}
-	// 	txOuts = append(txOuts, txOutReceiver)
-	// 	txOuts = append(txOuts, txOutSenderChange)
+		txOutReceiver := repository.TxO{
+			ScriptPubKey: receiverCrypt.FirstcoinAddress,
+			Value:        amount,
+		}
+		txOutSenderChange := repository.TxO{
+			ScriptPubKey: senderCrypt.FirstcoinAddress,
+			Value:        wallet.COINBASE_TRANSACTION_AMOUNT - amount,
+		}
+		txOuts = append(txOuts, txOutReceiver)
+		txOuts = append(txOuts, txOutSenderChange)
 
-	// 	expectedSenderTx := repository.Transaction{
-	// 		ID:     []byte{},
-	// 		TxIns:  txIns,
-	// 		TxOuts: txOuts,
-	// 	}
+		expectedSenderTx := repository.Transaction{
+			ID:     []byte{},
+			TxIns:  txIns,
+			TxOuts: txOuts,
+		}
 
-	// 	senderWallet := wallet.NewWallet(*senderCrypt)
+		senderWallet := wallet.NewWallet(*senderCrypt)
 
-	// 	tx, now, _ := senderWallet.CreateTransaction(receiverCrypt.FirstcoinAddress, amount)
+		tx, now, _ := senderWallet.CreateTransaction(receiverCrypt.FirstcoinAddress, amount)
 
-	// 	expectedSenderTx.Timestamp = now
+		expectedSenderTx.Timestamp = now
 
-	// 	expectedTxID := wallet.GenerateTransactionID(expectedSenderTx)
+		expectedTxID := wallet.GenerateTransactionID(expectedSenderTx)
 
-	// 	expectedSenderTx.ID = expectedTxID
+		expectedSenderTx.ID = expectedTxID
 
-	// 	txIns[0].ScriptSignature = senderWallet.GenerateTxSigScript(expectedTxID)
+		txIns[0].ScriptSignature = senderWallet.GenerateTxSigScript(expectedTxID)
 
-	// 	if err := wallet.IsValidTransaction(*tx); err != nil {
-	// 		t.Fatalf("Test failed: %+v", err)
-	// 	}
+		if err := wallet.IsValidTransaction(*tx); err != nil {
+			t.Fatalf("Test failed: %+v", err)
+		}
 
-	// 	if !reflect.DeepEqual(expectedSenderTx.Timestamp, tx.Timestamp) {
-	// 		t.Fatalf("Tx timestamp not equal to expected Tx timestamp")
-	// 	}
+		if !reflect.DeepEqual(expectedSenderTx.Timestamp, tx.Timestamp) {
+			t.Fatalf("Tx timestamp not equal to expected Tx timestamp")
+		}
 
-	// 	if !reflect.DeepEqual(len(expectedSenderTx.TxOuts), len(tx.TxOuts)) {
-	// 		t.Fatalf("Tx TxOuts not equal to expected Tx TxOuts")
-	// 	}
+		if !reflect.DeepEqual(len(expectedSenderTx.TxOuts), len(tx.TxOuts)) {
+			t.Fatalf("Tx TxOuts not equal to expected Tx TxOuts")
+		}
 
-	// 	if !reflect.DeepEqual(expectedSenderTx.TxIns[0].TxID, tx.TxIns[0].TxID) {
-	// 		t.Fatalf("Tx Ins UTxOID not equal to expected Tx Ins UTxOID")
-	// 	}
+		if !reflect.DeepEqual(expectedSenderTx.TxIns[0].TxID, tx.TxIns[0].TxID) {
+			t.Fatalf("Tx Ins UTxOID not equal to expected Tx Ins UTxOID")
+		}
 
-	// 	if !reflect.DeepEqual(expectedSenderTx.TxIns[0].TxOIndex, tx.TxIns[0].TxOIndex) {
-	// 		t.Fatalf("Tx Ins UTxOIndex not equal to expected Tx Ins UTxOIndex")
-	// 	}
-	// })
+		if !reflect.DeepEqual(expectedSenderTx.TxIns[0].TxOIndex, tx.TxIns[0].TxOIndex) {
+			t.Fatalf("Tx Ins UTxOIndex not equal to expected Tx Ins UTxOIndex")
+		}
+	})
 
-	// t.Run("invalidate bad tx - not enough money", func(t *testing.T) {
-	// 	senderCrypt := wallet.NewCryptographic()
-	// 	senderCrypt.GenerateKeyPair()
+	t.Run("invalidate bad tx - not enough money", func(t *testing.T) {
+		senderCrypt := wallet.NewCryptographic()
+		senderCrypt.GenerateKeyPair()
 
-	// 	receiverCrypt := wallet.NewCryptographic()
-	// 	receiverCrypt.GenerateKeyPair()
+		receiverCrypt := wallet.NewCryptographic()
+		receiverCrypt.GenerateKeyPair()
 
-	// 	amount := wallet.COINBASE_TRANSACTION_AMOUNT + 1
+		amount := wallet.COINBASE_TRANSACTION_AMOUNT + 1
 
-	// 	coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*senderCrypt, 0)
-	// 	repository.AddTxToUTxOSet(coinbaseTx)
+		coinbaseTx, _ := wallet.CreateCoinbaseTransaction(*senderCrypt, 0)
+		repository.AddTxToUTxOSet(coinbaseTx)
 
-	// 	txIns := make([]repository.TxIn, 0)
-	// 	txOuts := make([]repository.TxO, 0)
+		txIns := make([]repository.TxIn, 0)
+		txOuts := make([]repository.TxO, 0)
 
-	// 	txIn := repository.TxIn{
-	// 		TxID:            coinbaseTx.ID,
-	// 		TxOIndex:        0,
-	// 		ScriptSignature: []byte{},
-	// 	}
+		txIn := repository.TxIn{
+			TxID:            coinbaseTx.ID,
+			TxOIndex:        0,
+			ScriptSignature: []byte{},
+		}
 
-	// 	txIns = append(txIns, txIn)
+		txIns = append(txIns, txIn)
 
-	// 	txOutReceiver := repository.TxO{
-	// 		ScriptPubKey: receiverCrypt.FirstcoinAddress,
-	// 		Value:        amount,
-	// 	}
-	// 	txOutSenderChange := repository.TxO{
-	// 		ScriptPubKey: senderCrypt.FirstcoinAddress,
-	// 		Value:        wallet.COINBASE_TRANSACTION_AMOUNT - amount,
-	// 	}
-	// 	txOuts = append(txOuts, txOutReceiver)
-	// 	txOuts = append(txOuts, txOutSenderChange)
+		txOutReceiver := repository.TxO{
+			ScriptPubKey: receiverCrypt.FirstcoinAddress,
+			Value:        amount,
+		}
+		txOutSenderChange := repository.TxO{
+			ScriptPubKey: senderCrypt.FirstcoinAddress,
+			Value:        wallet.COINBASE_TRANSACTION_AMOUNT - amount,
+		}
+		txOuts = append(txOuts, txOutReceiver)
+		txOuts = append(txOuts, txOutSenderChange)
 
-	// 	senderWallet := wallet.NewWallet(*senderCrypt)
+		senderWallet := wallet.NewWallet(*senderCrypt)
 
-	// 	_, _, err := senderWallet.CreateTransaction(receiverCrypt.FirstcoinAddress, amount)
-	// 	if err == nil {
-	// 		t.Fatalf("Test failed: expected insufficient funds error")
-	// 	}
-	// })
+		_, _, err := senderWallet.CreateTransaction(receiverCrypt.FirstcoinAddress, amount)
+		if err == nil {
+			t.Fatalf("Test failed: expected insufficient funds error")
+		}
+	})
 
 	t.Run("invalidate bad tx - signature incorrect", func(t *testing.T) {
 		senderCrypt := wallet.NewCryptographic()
