@@ -29,7 +29,7 @@ func NewClient(p *Peers, b *coin.Blockchain, t string) *Client {
 
 func (c *Client) BroadcastBlock(block coin.Block) coin.Block {
 	j, err := json.Marshal(block)
-	utils.CheckError(err)
+	utils.PanicError(err)
 
 	for _, peer := range c.Peers.Hostnames {
 		if peer != c.ThisPeer {
@@ -108,18 +108,32 @@ func (c *Client) GetTxPoolFromPeer(peer string) (map[repository.TxIDType]reposit
 	return txPool, nil
 }
 
-func (c *Client) GetPeers() map[string]string {
-	resp, err := http.Get(fmt.Sprintf("http://%s/peers", seedHost))
-	utils.CheckError(err)
+func (c *Client) GetPeers(hostName string) map[string]string {
+	resp, err := http.Get(fmt.Sprintf("http://%s/peers", hostName))
+	utils.PanicError(err)
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	var peers map[string]string
 
 	err = json.Unmarshal(respBody, &peers)
-	utils.CheckError(err)
+	utils.PanicError(err)
 
-	c.Peers.Hostnames = peers
-	// delete(c.GetPeers(), c.ThisPeer)
+	return peers
+}
+
+func (c *Client) GetHosts(hostName string, excludedHosts map[string]string) []string {
+	j, err := json.Marshal(excludedHosts)
+	utils.PanicError(err)
+	body := bytes.NewReader(j)
+
+	resp, err := http.Post(fmt.Sprintf("http://%s/hosts", hostName), "application/json", body)
+	utils.PanicError(err)
+
+	respBody, err := ioutil.ReadAll(resp.Body)
+	var peers []string
+
+	err = json.Unmarshal(respBody, &peers)
+	utils.PanicError(err)
 
 	return peers
 }
@@ -193,9 +207,9 @@ func (c *Client) BroadcastOnline(thisHostname string) {
 	h := HostName{Hostname: thisHostname}
 
 	j, err := json.Marshal(h)
-	utils.CheckError(err)
+	utils.PanicError(err)
 
-	fmt.Println(string(j))
+	fmt.Println("Notifying these hosts: ", string(j))
 
 	for _, hostname := range c.Peers.Hostnames {
 		body := bytes.NewReader(j)

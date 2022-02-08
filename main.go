@@ -10,6 +10,8 @@ import (
 	"os"
 )
 
+const seedHost = "localhost:8080"
+
 // For now seed host is identified as being on port 8080
 func isSeedHost(port string) bool {
 	if port == "8080" {
@@ -31,6 +33,8 @@ func main() {
 	thisPeer := fmt.Sprintf("localhost:%s", port)
 
 	peers := peer.NewPeers()
+	peers.ThisHost = thisPeer
+
 	crypt := wallet.NewCryptographic()
 	crypt.GenerateKeyPair()
 
@@ -42,25 +46,33 @@ func main() {
 		*blockchain, _ = service.CreateGenesisBlockchain(*crypt, *blockchain)
 		client = peer.NewClient(peers, blockchain, thisPeer)
 	} else {
-		client = peer.NewClient(peers, blockchain, thisPeer)
+		if len(args) > 1 {
+			specificPeer := args[1]
+			peers.Hostnames[specificPeer] = specificPeer
 
-		p := client.GetPeers()
+			client = peer.NewClient(peers, blockchain, thisPeer)
+		} else {
+			client = peer.NewClient(peers, blockchain, thisPeer)
+			newPeers := client.GetPeers(seedHost)
+			peers.Hostnames = newPeers
 
-		err := client.QueryPeersForBlockchain(p)
+		}
+
+		err := client.QueryPeersForBlockchain(client.Peers.Hostnames)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		err = client.QueryNetworkForUnconfirmedTxPool(p)
+		err = client.QueryNetworkForUnconfirmedTxPool(client.Peers.Hostnames)
 		if err != nil {
 			return
 		}
 
-		utils.InfoLogger.Println(p)
+		utils.InfoLogger.Println(client.Peers.Hostnames)
 		client.BroadcastOnline(thisPeer)
 	}
 
-	peers.AddHostname(thisPeer)
+	// peers.AddHostname(thisPeer)
 
 	service := service.NewBlockchainService(blockchain, userWallet)
 	coinServerHandler := peer.NewCoinServerHandler(service, client, peers)

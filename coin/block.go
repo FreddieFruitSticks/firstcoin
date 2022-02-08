@@ -28,7 +28,7 @@ func calculateBlockHash(index int, previousHash []byte, timestamp int, transacti
 	// TODO: Does POW hash calculation contain transactions??
 	concatenatedTransactionIDs := concatTransactionIDs(transactions)
 	_, err := msgHash.Write([]byte(fmt.Sprintf("%d%s%d%s%d", index, string(previousHash), timestamp, concatenatedTransactionIDs, difficultyLevel)))
-	utils.CheckError(err)
+	utils.PanicError(err)
 
 	return msgHash.Sum(nil)
 }
@@ -154,7 +154,7 @@ func ValidateProofOfWork(hash []byte, nonce int, difficultyLevel int) bool {
 
 func Hash(block Block) string {
 	blockString, err := json.Marshal(block)
-	utils.CheckError(err)
+	utils.PanicError(err)
 
 	sha1Hash := hashBytes(blockString)
 

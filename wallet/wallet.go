@@ -119,7 +119,7 @@ func GenerateTransactionID(transaction repository.Transaction) []byte {
 	}
 
 	_, err := msgHash.Write([]byte(fmt.Sprintf("%s%s%d", concatTxIn, concatTxOut, transaction.Timestamp)))
-	utils.CheckError(err)
+	utils.PanicError(err)
 
 	return msgHash.Sum(nil)
 }

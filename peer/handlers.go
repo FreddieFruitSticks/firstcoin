@@ -226,10 +226,36 @@ func convertHostnamesToArray(hosts map[string]string) []string {
 	return hostnames
 }
 
-func (c *CoinServerHandler) getHosts(r *http.Request) (*HTTPResponse, *HTTPError) {
-	hostnames := convertHostnamesToArray(c.Peers.Hostnames)
+func (c *CoinServerHandler) getHostsRecursive(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
-	case "GET":
+	case "POST":
+		excludedHosts := make(map[string]string, 0)
+
+		err := readBody(r, &excludedHosts)
+		if err != nil {
+			return nil, &HTTPError{
+				Code:    http.StatusBadRequest,
+				Message: err.Error(),
+			}
+		}
+
+		excludedHosts[c.Client.ThisPeer] = c.Client.ThisPeer
+
+		for k, _ := range c.Peers.Hostnames {
+			if excludedHosts[k] != "" {
+				continue
+			}
+
+			peersHostNames := c.Client.GetHosts(k, excludedHosts)
+
+			for _, v := range peersHostNames {
+				excludedHosts[v] = v
+			}
+			excludedHosts[k] = k
+
+		}
+
+		hostnames := convertHostnamesToArray(excludedHosts)
 		return &HTTPResponse{
 			StatusCode: http.StatusOK,
 			Body:       hostnames,
@@ -283,7 +309,11 @@ func (c *CoinServerHandler) peers(r *http.Request) (*HTTPResponse, *HTTPError) {
 			}
 		}
 
+		fmt.Printf("Adding hostname to list of peers %+v\n", t)
+
 		c.Peers.AddHostname(t.Hostname)
+
+		fmt.Printf("current hostNames %+v", c.Peers.Hostnames)
 
 		return &HTTPResponse{
 			StatusCode: http.StatusOK,

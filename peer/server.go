@@ -29,7 +29,7 @@ func (s *Server) HandleServer(port string) {
 	http.HandleFunc("/txpool", JSONHandler(s.CoinServerHandler.getTxPool))             // control endpoint
 	http.HandleFunc("/txset", JSONHandler(s.CoinServerHandler.getTxSet))               // control endpoint
 	http.HandleFunc("/blockchain", JSONHandler(s.CoinServerHandler.getBlockchain))     // control endpoint
-	http.HandleFunc("/hosts", JSONHandler(s.CoinServerHandler.getHosts))               // control endpoint
+	http.HandleFunc("/hosts", JSONHandler(s.CoinServerHandler.getHostsRecursive))      // control endpoint
 	http.HandleFunc("/host-details", JSONHandler(s.CoinServerHandler.getHostDetails))  // control endpoint
 
 	http.HandleFunc("/block", JSONHandler(s.CoinServerHandler.mineBlock))
