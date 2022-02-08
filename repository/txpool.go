@@ -16,10 +16,10 @@ func (t Transaction) String() string {
 	return fmt.Sprintf("txId: %s\ntxIns: %+v\ntxOuts: %+v\n", t.ID, t.TxIns, t.TxOuts)
 }
 
-func AddTxToTxPool(txs ...Transaction) {
-	for _, tx := range txs {
-		unconfirmedTransactionPool[TxIDType(tx.ID)] = tx
-	}
+func AddTxToTxPool(tx Transaction) bool {
+	unconfirmedTransactionPool[TxIDType(tx.ID)] = tx
+
+	return true
 }
 
 func GetTxPool() map[TxIDType]Transaction {

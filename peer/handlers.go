@@ -58,7 +58,6 @@ func (c *CoinServerHandler) receiveTransaction(r *http.Request) (*HTTPResponse, 
 
 		_, ok := repository.GetTxFromTxPool(tx.ID)
 		if ok {
-			utils.InfoLogger.Println(fmt.Sprintf("tx exists in txPool %s", tx))
 			return &HTTPResponse{
 				StatusCode: http.StatusNotModified,
 				Body:       tx,
@@ -86,7 +85,7 @@ func (c *CoinServerHandler) receiveTransaction(r *http.Request) (*HTTPResponse, 
 		ok = c.BlockchainService.AddTxToTxPool(tx)
 		if ok {
 			utils.InfoLogger.Println("Received new Tx and added to pool. Relaying tx pool")
-			// c.Client.BroadcastTransaction(tx)
+			c.Client.BroadcastTransaction(tx)
 		}
 
 		return &HTTPResponse{

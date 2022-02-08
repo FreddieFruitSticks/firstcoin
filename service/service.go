@@ -134,9 +134,10 @@ func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockch
 }
 
 func (s *BlockchainService) AddTxToTxPool(tx repository.Transaction) bool {
-	repository.AddTxToTxPool(tx)
-
-	return true
+	if _, ok := repository.GetTxFromTxPool(tx.ID); ok {
+		return false
+	}
+	return repository.AddTxToTxPool(tx)
 }
 
 func CopyBlock(bl coin.Block) (coin.Block, error) {
