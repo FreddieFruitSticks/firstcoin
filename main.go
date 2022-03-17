@@ -79,5 +79,5 @@ func main() {
 
 	server := peer.NewServer(*coinServerHandler)
 
-	server.HandleServer(args[0])
+	server.HandleServer(args[0], port == "8080")
 }

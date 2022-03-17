@@ -19,10 +19,15 @@ func NewServer(cs CoinServerHandler) *Server {
 	}
 }
 
-func (s *Server) HandleServer(port string) {
+func (s *Server) HandleServer(port string, shouldHandleWeb bool) {
 	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "pong from, %q", html.EscapeString(r.URL.Path))
 	})
+
+	if shouldHandleWeb {
+		buildHandler := http.FileServer(http.Dir("web/build"))
+		http.Handle("/", buildHandler)
+	}
 
 	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock))     // control endpoint
 	http.HandleFunc("/spend-coin", JSONHandler(s.CoinServerHandler.createTransaction)) // control endpoint
