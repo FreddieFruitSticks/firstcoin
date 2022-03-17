@@ -1,14 +1,12 @@
 # firstcoin
 
-A replica of the bitcoin protocol (work in progress).
+A blockchain to learn about the fundamentals of decentralised consensus, loosely based off the bitcoin protocol.
 
-Some features and limitations:
+Firstcoin has a few notable features worth mentioning. Each node has the following features:
 
-1. The SIGHASH is always assumed to be ALL
-2. The only script is pay-to-public-key-hash
-3. Transaction fees are fixed, and are not variable (e.g. not calculated based on bitsize of transaction).
-4. Transaction serialisation is not explicit and transaction size limitations are not adhered to.
-5. The implementation of the version prefix in the base58Check encoding only supports bitcoin addresses
-6. The wallet is a single randomly generated bitcoin address
+1. Independent verification of each transaction based on a list of criteria.
+2. Independent aggregation of all the transactions in to each block, with a proof-of-work demonstration.
+3. Independent block verification and chain construction
+4. Independent chain selection based on the most proof of work (albeit very basic in this project)
 
-(more features and limitations to follow)
+These high level rules bring about the emergent consensus property of the blockchain. However, in this project miners do not compete for blocks. The first node is simply chosen for demonstration purposes.
