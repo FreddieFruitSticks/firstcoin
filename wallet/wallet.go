@@ -1,9 +1,9 @@
 package wallet
 
 import (
-	"blockchain/repository"
-	"blockchain/utils"
 	"crypto/sha256"
+	"firstcoin/repository"
+	"firstcoin/utils"
 	"fmt"
 	"reflect"
 	"strconv"

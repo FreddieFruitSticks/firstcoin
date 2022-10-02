@@ -1,16 +1,16 @@
 package service
 
 import (
-	"blockchain/coin"
-	"blockchain/repository"
-	"blockchain/utils"
-	"blockchain/wallet"
 	"encoding/json"
+	"firstcoin/coin"
+	"firstcoin/repository"
+	"firstcoin/utils"
+	"firstcoin/wallet"
 	"fmt"
 )
 
 const (
-	SeedDifficultyLevel = 5
+	SeedDifficultyLevel = 6
 )
 
 type BlockchainService struct {

@@ -1,8 +1,8 @@
 package wallet_test
 
 import (
-	"blockchain/repository"
-	"blockchain/wallet"
+	"firstcoin/repository"
+	"firstcoin/wallet"
 	"reflect"
 	"sort"
 	"testing"

@@ -1,12 +1,12 @@
 package coin
 
 import (
-	"blockchain/repository"
-	"blockchain/utils"
-	"blockchain/wallet"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"firstcoin/repository"
+	"firstcoin/utils"
+	"firstcoin/wallet"
 	"fmt"
 	"reflect"
 	"time"

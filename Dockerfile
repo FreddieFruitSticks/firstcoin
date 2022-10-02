@@ -2,16 +2,22 @@
 
 FROM golang:1.17.7-alpine3.15
 
-ADD . /go/src/blockchain
-COPY ./wait-for /go/src/blockchain
+ARG NODE_PORT
+ARG PEER_PORT
+ARG HOST_NAME
 
-ENV GOPATH=/go/src/
+ADD . /go/src/firstcoin
 
-WORKDIR /go/src/blockchain
+ENV GOPATH=/go
+ENV NODE_PORT=$NODE_PORT
+ENV PEER_PORT=$PEER_PORT
+ENV HOST_NAME=$HOST_NAME
+ENV PATH="/go/bin:${PATH}" 
 
-RUN go install ./...
+WORKDIR /go/src/firstcoin
 
-ENV PATH="/go/src/bin:${PATH}" 
+RUN go install ./... 
 
-
-# CMD "./wait-for-it.sh" $PEER_PORT -- "blockchain" $NODE_PORT $PEER_PORT
+# CMD ["/go/bin/firstcoin", "$NODE_PORT"]
+# CMD ["echo", "$NODE_PORT"]
+# CMD ["sh", "-c", "/go/bin/firstcoin $NODE_PORT $PEER_PORT"]

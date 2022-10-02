@@ -1,4 +1,4 @@
-module blockchain
+module firstcoin
 
 go 1.17
 

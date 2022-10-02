@@ -29,13 +29,14 @@ func (s *Server) HandleServer(port string, shouldHandleWeb bool) {
 		http.Handle("/", buildHandler)
 	}
 
-	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock))     // control endpoint
-	http.HandleFunc("/spend-coin", JSONHandler(s.CoinServerHandler.createTransaction)) // control endpoint
-	http.HandleFunc("/txpool", JSONHandler(s.CoinServerHandler.getTxPool))             // control endpoint
-	http.HandleFunc("/txset", JSONHandler(s.CoinServerHandler.getTxSet))               // control endpoint
-	http.HandleFunc("/blockchain", JSONHandler(s.CoinServerHandler.getBlockchain))     // control endpoint
-	http.HandleFunc("/hosts", JSONHandler(s.CoinServerHandler.getHostsRecursive))      // control endpoint
-	http.HandleFunc("/host-details", JSONHandler(s.CoinServerHandler.getHostDetails))  // control endpoint
+	http.HandleFunc("/create-block", JSONHandler(s.CoinServerHandler.createBlock))        // control endpoint
+	http.HandleFunc("/spend-coin", JSONHandler(s.CoinServerHandler.createTransaction))    // control endpoint
+	http.HandleFunc("/spend-coin-relay", JSONHandler(s.CoinServerHandler.spendCoinRelay)) // control endpoint
+	http.HandleFunc("/txpool", JSONHandler(s.CoinServerHandler.getTxPool))                // control endpoint
+	http.HandleFunc("/txset", JSONHandler(s.CoinServerHandler.getTxSet))                  // control endpoint
+	http.HandleFunc("/blockchain", JSONHandler(s.CoinServerHandler.getBlockchain))        // control endpoint
+	http.HandleFunc("/hosts", JSONHandler(s.CoinServerHandler.getHostsRecursive))         // control endpoint
+	http.HandleFunc("/host-details", JSONHandler(s.CoinServerHandler.getHostDetails))     // control endpoint
 
 	http.HandleFunc("/block", JSONHandler(s.CoinServerHandler.mineBlock))
 	http.HandleFunc("/block-chain", JSONHandler(s.CoinServerHandler.blockChain))
@@ -49,9 +50,16 @@ func (s *Server) HandleServer(port string, shouldHandleWeb bool) {
 
 type ServiceHandler func(*http.Request) (*HTTPResponse, *HTTPError)
 
+var allowList = map[string]bool{
+	"http://localhost:8080": true,
+	"http://localhost:3000": true,
+}
+
 func JSONHandler(handler ServiceHandler) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		if origin := request.Header.Get("Origin"); allowList[origin] {
+			writer.Header().Set("Access-Control-Allow-Origin", origin)
+		}
 
 		httpResponse, err := handler(request)
 		writer.Header().Set("Content-Type", "application/json; charset=utf-8")

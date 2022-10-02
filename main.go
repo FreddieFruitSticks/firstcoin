@@ -1,16 +1,17 @@
 package main
 
 import (
-	"blockchain/coin"
-	"blockchain/peer"
-	"blockchain/service"
-	"blockchain/utils"
-	"blockchain/wallet"
+	"firstcoin/coin"
+	"firstcoin/peer"
+	"firstcoin/repository"
+	"firstcoin/service"
+	"firstcoin/utils"
+	"firstcoin/wallet"
 	"fmt"
 	"os"
 )
 
-const seedHost = "localhost:8080"
+const seedHost = "firstcoin-node1:8080"
 
 // For now seed host is identified as being on port 8080
 func isSeedHost(port string) bool {
@@ -29,8 +30,9 @@ func main() {
 
 	blocks := make([]coin.Block, 0)
 	blockchain := coin.NewBlockchain(blocks)
-
-	thisPeer := fmt.Sprintf("localhost:%s", port)
+	hostname := os.Getenv("HOST_NAME")
+	thisPeer := fmt.Sprintf("%s:%s", hostname, port)
+	fmt.Printf("This peer: %s\n", thisPeer)
 
 	peers := peer.NewPeers()
 	peers.ThisHost = thisPeer
@@ -38,7 +40,8 @@ func main() {
 	crypt := wallet.NewCryptographic()
 	crypt.GenerateKeyPair()
 
-	fmt.Println(string(string(crypt.FirstcoinAddress)))
+	fmt.Printf("Address of this node: %s\n", string(string(crypt.FirstcoinAddress)))
+	fmt.Printf("Address of this node: %s\n", string(repository.Base64Encode(crypt.FirstcoinAddress)))
 
 	userWallet := wallet.NewWallet(*crypt)
 
@@ -47,15 +50,14 @@ func main() {
 		client = peer.NewClient(peers, blockchain, thisPeer)
 	} else {
 		if len(args) > 1 {
-			specificPeer := args[1]
-			peers.Hostnames[specificPeer] = specificPeer
+			specificPeerToConnectTo := args[1]
+			peers.Hostnames[specificPeerToConnectTo] = specificPeerToConnectTo
 
 			client = peer.NewClient(peers, blockchain, thisPeer)
 		} else {
 			client = peer.NewClient(peers, blockchain, thisPeer)
 			newPeers := client.GetPeers(seedHost)
 			peers.Hostnames = newPeers
-
 		}
 
 		err := client.QueryPeersForBlockchain(client.Peers.Hostnames)
@@ -63,6 +65,7 @@ func main() {
 			fmt.Println(err)
 			return
 		}
+
 		err = client.QueryNetworkForUnconfirmedTxPool(client.Peers.Hostnames)
 		if err != nil {
 			return

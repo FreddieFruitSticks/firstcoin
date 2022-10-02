@@ -1,7 +1,7 @@
 package coin
 
 import (
-	"blockchain/repository"
+	"firstcoin/repository"
 	"fmt"
 	"time"
 )

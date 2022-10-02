@@ -1,12 +1,12 @@
 package peer
 
 import (
-	"blockchain/coin"
-	"blockchain/repository"
-	"blockchain/service"
-	"blockchain/utils"
 	"bytes"
 	"encoding/json"
+	"firstcoin/coin"
+	"firstcoin/repository"
+	"firstcoin/service"
+	"firstcoin/utils"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -68,7 +68,7 @@ func (c *Client) getBlockchain(address string) (*coin.Blockchain, error) {
 
 	// if err := bc.IsValidBlockchain(); err != nil {
 	// 	c.Blockchain = nil
-	// 	return nil, fmt.Errorf("invalid blockchain. error: %s", err.Error())
+	// 	return nil, fmt.Errorf("invalid firstcoin. error: %s", err.Error())
 	// }
 
 	return &bc, nil
@@ -89,6 +89,28 @@ func (c *Client) GetLatestBlockFromPeer(peer string) (*coin.Block, error) {
 	}
 
 	return &block, nil
+}
+
+func (c *Client) SpendCoin(spendCoinRelay SpendCoinRelay) error {
+	ct := CreateTransactionControl{
+		Address: spendCoinRelay.Address,
+		Amount:  spendCoinRelay.Amount,
+	}
+
+	j, err := json.Marshal(ct)
+	if err != nil {
+		return err
+	}
+
+	body := bytes.NewReader(j)
+
+	_, err = http.Post(fmt.Sprintf("http://%s/spend-coin", spendCoinRelay.Host), "application/json", body)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *Client) GetTxPoolFromPeer(peer string) (map[repository.TxIDType]repository.Transaction, error) {
@@ -121,7 +143,7 @@ func (c *Client) GetPeers(hostName string) map[string]string {
 	return peers
 }
 
-func (c *Client) GetHosts(hostName string, excludedHosts map[string]string) []string {
+func (c *Client) GetHosts(hostName string, excludedHosts map[string]Details) []Details {
 	j, err := json.Marshal(excludedHosts)
 	utils.PanicError(err)
 	body := bytes.NewReader(j)
@@ -130,7 +152,7 @@ func (c *Client) GetHosts(hostName string, excludedHosts map[string]string) []st
 	utils.PanicError(err)
 
 	respBody, err := ioutil.ReadAll(resp.Body)
-	var peers []string
+	var peers []Details
 
 	err = json.Unmarshal(respBody, &peers)
 	utils.PanicError(err)
@@ -149,6 +171,7 @@ func (c *Client) QueryPeersForBlockchain(peers map[string]string) error {
 		if err != nil {
 			return err
 		}
+
 		if len(c.Blockchain.Blocks) == 0 {
 			bc, err := c.getBlockchain(address)
 			if err != nil {
@@ -254,7 +277,7 @@ func readResponseBody(body io.ReadCloser) string {
 
 func replayBlockChainTransactions(bc coin.Blockchain) error {
 	if err := bc.Blocks[0].IsGenesisBlock(); err != nil {
-		return fmt.Errorf("Invalid blockchain: %s. error: %s", "invalid genesis block", err.Error())
+		return fmt.Errorf("Invalid firstcoin: %s. error: %s", "invalid genesis block", err.Error())
 	}
 
 	err := service.CommitBlockTransactions(bc.Blocks[0])

@@ -1,7 +1,7 @@
 package wallet_test
 
 import (
-	"blockchain/wallet"
+	"firstcoin/wallet"
 	"testing"
 )
 

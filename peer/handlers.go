@@ -1,12 +1,12 @@
 package peer
 
 import (
-	"blockchain/coin"
-	"blockchain/repository"
-	"blockchain/service"
-	"blockchain/utils"
-	"blockchain/wallet"
 	"encoding/json"
+	"firstcoin/coin"
+	"firstcoin/repository"
+	"firstcoin/service"
+	"firstcoin/utils"
+	"firstcoin/wallet"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -99,6 +99,37 @@ func (c *CoinServerHandler) receiveTransaction(r *http.Request) (*HTTPResponse, 
 	}
 }
 
+func (c *CoinServerHandler) spendCoinRelay(r *http.Request) (*HTTPResponse, *HTTPError) {
+	switch r.Method {
+	case "POST":
+		scr := SpendCoinRelay{}
+		err := readBody(r, &scr)
+		if err != nil {
+			return nil, &HTTPError{
+				Code:    http.StatusBadRequest,
+				Message: err.Error(),
+			}
+		}
+
+		err = c.Client.SpendCoin(scr)
+		if err != nil {
+			return nil, &HTTPError{
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+			}
+		}
+
+		return &HTTPResponse{
+			StatusCode: http.StatusCreated,
+			Body:       scr,
+		}, nil
+	}
+
+	return nil, &HTTPError{
+		Code: http.StatusMethodNotAllowed,
+	}
+}
+
 func (c *CoinServerHandler) createTransaction(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
 	case "POST":
@@ -124,7 +155,7 @@ func (c *CoinServerHandler) createTransaction(r *http.Request) (*HTTPResponse, *
 		if !reflect.DeepEqual(tID, tx.ID) {
 			return nil, &HTTPError{
 				Code:    http.StatusBadRequest,
-				Message: "unequal tsek",
+				Message: "unequal tx ids",
 			}
 		}
 
@@ -215,11 +246,11 @@ func (c *CoinServerHandler) getBlockchain(r *http.Request) (*HTTPResponse, *HTTP
 	}
 }
 
-func convertHostnamesToArray(hosts map[string]string) []string {
-	hostnames := make([]string, 0)
+func convertHostnamesToArray(hosts map[string]Details) []Details {
+	hostnames := make([]Details, 0)
 
-	for k := range hosts {
-		hostnames = append(hostnames, k)
+	for _, details := range hosts {
+		hostnames = append(hostnames, details)
 	}
 
 	return hostnames
@@ -228,7 +259,7 @@ func convertHostnamesToArray(hosts map[string]string) []string {
 func (c *CoinServerHandler) getHostsRecursive(r *http.Request) (*HTTPResponse, *HTTPError) {
 	switch r.Method {
 	case "POST":
-		excludedHosts := make(map[string]string, 0)
+		excludedHosts := make(map[string]Details, 0)
 
 		err := readBody(r, &excludedHosts)
 		if err != nil {
@@ -237,21 +268,23 @@ func (c *CoinServerHandler) getHostsRecursive(r *http.Request) (*HTTPResponse, *
 				Message: err.Error(),
 			}
 		}
+		address := c.BlockchainService.Wallet.Crypt.FirstcoinAddress
+		excludedHosts[c.Client.ThisPeer] = Details{
+			Address:     address,
+			TotalAmount: wallet.GetTotalAmount(address),
+			HostName:    c.Client.ThisPeer,
+		}
 
-		excludedHosts[c.Client.ThisPeer] = c.Client.ThisPeer
-
-		for k, _ := range c.Peers.Hostnames {
-			if excludedHosts[k] != "" {
+		for hostname, _ := range c.Peers.Hostnames {
+			if excludedHosts[hostname].HostName != "" {
 				continue
 			}
 
-			peersHostNames := c.Client.GetHosts(k, excludedHosts)
+			peersHostNames := c.Client.GetHosts(hostname, excludedHosts)
 
-			for _, v := range peersHostNames {
-				excludedHosts[v] = v
+			for _, hostDetails := range peersHostNames {
+				excludedHosts[hostDetails.HostName] = hostDetails
 			}
-			excludedHosts[k] = k
-
 		}
 
 		hostnames := convertHostnamesToArray(excludedHosts)
@@ -293,6 +326,7 @@ func (c *CoinServerHandler) getHostDetails(r *http.Request) (*HTTPResponse, *HTT
 type Details struct {
 	Address     []byte `json:"address"`
 	TotalAmount int    `json:"totalAmount"`
+	HostName    string `json:"hostname"`
 }
 
 func (c *CoinServerHandler) peers(r *http.Request) (*HTTPResponse, *HTTPError) {
@@ -455,6 +489,12 @@ type HostName struct {
 }
 
 type CreateTransactionControl struct {
+	Address []byte `json:"address"`
+	Amount  int    `json:"amount"`
+}
+
+type SpendCoinRelay struct {
+	Host    string `json:"host"`
 	Address []byte `json:"address"`
 	Amount  int    `json:"amount"`
 }

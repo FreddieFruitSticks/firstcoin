@@ -1,48 +1,49 @@
 version: "3.8"
+networks:
+    firstcoinnetwork:
+        name: firstcoinnetwork
+        driver: bridge
+
 services:
     node1:
+        container_name: firstcoin-node1
         build:
-            context: .            
-        environment:
-            NODE_PORT: "8080"
+            context: .    
+            args:
+               NODE_PORT: "8080"
+               HOST_NAME: "firstcoin-node1"
+        networks: 
+            firstcoinnetwork:
         ports:
             - "8080:8080"
-        network_mode: host
-        command: ["blockchain", "8080"]
+        command: ["sh", "-c", "/go/bin/firstcoin 8080"]
 
     node2:
+        container_name: firstcoin-node2
         build:
             context: .
+            args:
+               NODE_PORT: "8081"
+               PEER_PORT: "firstcoin-node1:8080"
+               HOST_NAME: "firstcoin-node2"
+        networks: 
+            firstcoinnetwork: 
         depends_on: 
             - node1
-        environment:
-            NODE_PORT: "8081"
-            PEER_PORT: "localhost:8080"
-        ports:
-            - "8081:8081"
-        network_mode: host
-        healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:8080"]
-            interval: 1m30s
-            timeout: 10s
-            retries: 3
-            start_period: 40s
-        command: sh -c './wait-for localhost:8080 -- blockchain 8081 localhost:8080'
-    node3:
-        build:
-            context: .
-        depends_on: 
-            - node2
-        environment:
-            NODE_PORT: "8082"
-            PEER_PORT: "localhost:8081"
-        ports:
-            - "8082:8082"
-        network_mode: host
-        healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:8081"]
-            interval: 1m30s
-            timeout: 10s
-            retries: 3
-            start_period: 40s
-        command: sh -c './wait-for localhost:8081 -- blockchain 8082 localhost:8081'
+        # ports:
+        #     - "8081:8081"
+        command: ["sh", "-c", "./wait-for firstcoin-node1:8080 -- firstcoin 8081 firstcoin-node1:8080"]
+        # command: ["firstcoin", "8081", localhost:8080]
+    # node3:
+    #     container_name: firstcoin-node3
+    #     build:
+    #         context: .
+    #         args:
+    #            NODE_PORT: "8082"
+    #            PEER_PORT: "localhost:8081"
+    #     depends_on: 
+    #         - node2
+    #     ports:
+    #         - "8082:8082"
+        # command: sh -c './wait-for localhost:8081 -- firstcoin 8082 localhost:8081'
+        # command: ["firstcoin", "8082", localhost:8081]

@@ -1,10 +1,10 @@
 package service_test
 
 import (
-	"blockchain/coin"
-	"blockchain/repository"
-	"blockchain/service"
-	"blockchain/wallet"
+	"firstcoin/coin"
+	"firstcoin/repository"
+	"firstcoin/service"
+	"firstcoin/wallet"
 	"testing"
 )
 
