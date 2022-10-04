@@ -30,20 +30,14 @@ services:
             firstcoinnetwork: 
         depends_on: 
             - node1
-        # ports:
-        #     - "8081:8081"
         command: ["sh", "-c", "./wait-for firstcoin-node1:8080 -- firstcoin 8081 firstcoin-node1:8080"]
-        # command: ["firstcoin", "8081", localhost:8080]
-    # node3:
-    #     container_name: firstcoin-node3
-    #     build:
-    #         context: .
-    #         args:
-    #            NODE_PORT: "8082"
-    #            PEER_PORT: "localhost:8081"
-    #     depends_on: 
-    #         - node2
-    #     ports:
-    #         - "8082:8082"
-        # command: sh -c './wait-for localhost:8081 -- firstcoin 8082 localhost:8081'
-        # command: ["firstcoin", "8082", localhost:8081]
+    node3:
+        container_name: firstcoin-node3
+        build:
+            context: .
+            args:
+               NODE_PORT: "8082"
+               PEER_PORT: "localhost:8081"
+        depends_on: 
+            - node2
+        command: ["sh", "-c", "./wait-for firstcoin-node2:8081 -- firstcoin 8082 firstcoin-node2:8081"]
