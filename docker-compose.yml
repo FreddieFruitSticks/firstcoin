@@ -5,39 +5,38 @@ networks:
         driver: bridge
 
 services:
+    firstnodeimage:
+            build:
+                context: .    
     node1:
         container_name: firstcoin-node1
-        build:
-            context: .    
-            args:
-               NODE_PORT: "8080"
-               HOST_NAME: "firstcoin-node1"
+        image: firstcoin-firstnodeimage
         networks: 
             firstcoinnetwork:
+        environment:
+            - HOST_NAME=firstcoin-node1
         ports:
             - "8080:8080"
         command: ["sh", "-c", "/go/bin/firstcoin 8080"]
 
     node2:
         container_name: firstcoin-node2
-        build:
-            context: .
-            args:
-               NODE_PORT: "8081"
-               PEER_PORT: "firstcoin-node1:8080"
-               HOST_NAME: "firstcoin-node2"
+        image: firstcoin-firstnodeimage
         networks: 
             firstcoinnetwork: 
+        environment:
+            - HOST_NAME=firstcoin-node2
         depends_on: 
             - node1
         command: ["sh", "-c", "./wait-for firstcoin-node1:8080 -- firstcoin 8081 firstcoin-node1:8080"]
+
     node3:
         container_name: firstcoin-node3
-        build:
-            context: .
-            args:
-               NODE_PORT: "8082"
-               PEER_PORT: "localhost:8081"
+        image: firstcoin-firstnodeimage
+        environment:
+            - HOST_NAME=firstcoin-node3
         depends_on: 
             - node2
+        networks: 
+            firstcoinnetwork: 
         command: ["sh", "-c", "./wait-for firstcoin-node2:8081 -- firstcoin 8082 firstcoin-node2:8081"]
