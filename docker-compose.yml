@@ -5,12 +5,9 @@ networks:
         driver: bridge
 
 services:
-    firstnodeimage:
-            build:
-                context: .    
     node1:
         container_name: firstcoin-node1
-        image: firstcoin-firstnodeimage
+        image: 525135309370.dkr.ecr.eu-west-1.amazonaws.com/firstcoinstack-firstcoinrepository4a4774a5-brndmcpptvud
         networks: 
             firstcoinnetwork:
         environment:
@@ -21,7 +18,7 @@ services:
 
     node2:
         container_name: firstcoin-node2
-        image: firstcoin-firstnodeimage
+        image: 525135309370.dkr.ecr.eu-west-1.amazonaws.com/firstcoinstack-firstcoinrepository4a4774a5-brndmcpptvud
         networks: 
             firstcoinnetwork: 
         environment:
@@ -32,7 +29,7 @@ services:
 
     node3:
         container_name: firstcoin-node3
-        image: firstcoin-firstnodeimage
+        image: 525135309370.dkr.ecr.eu-west-1.amazonaws.com/firstcoinstack-firstcoinrepository4a4774a5-brndmcpptvud
         environment:
             - HOST_NAME=firstcoin-node3
         depends_on: 
