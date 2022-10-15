@@ -38,7 +38,10 @@ func main() {
 	peers.ThisHost = thisPeer
 
 	crypt := wallet.NewCryptographic()
-	crypt.GenerateKeyPair()
+	err := crypt.GenerateKeyPair()
+	if err != nil {
+		utils.PanicError(err)
+	}
 
 	fmt.Printf("Address of this node: %s\n", string(string(crypt.FirstcoinAddress)))
 	fmt.Printf("Address of this node: %s\n", string(repository.Base64Encode(crypt.FirstcoinAddress)))
@@ -46,7 +49,11 @@ func main() {
 	userWallet := wallet.NewWallet(*crypt)
 
 	if isSeedHost(port) {
-		*blockchain, _ = service.CreateGenesisBlockchain(*crypt, *blockchain)
+		var err error
+		*blockchain, _, err = service.CreateGenesisBlockchain(*crypt, *blockchain)
+		if err != nil {
+			utils.PanicError(err)
+		}
 		client = peer.NewClient(peers, blockchain, thisPeer)
 	} else {
 		if len(args) > 1 {
@@ -56,7 +63,10 @@ func main() {
 			client = peer.NewClient(peers, blockchain, thisPeer)
 		} else {
 			client = peer.NewClient(peers, blockchain, thisPeer)
-			newPeers := client.GetPeers(seedHost)
+			newPeers, err := client.GetPeers(seedHost)
+			if err != nil {
+				utils.ErrorLogger.Printf("Could not get peers: %s", err)
+			}
 			peers.Hostnames = newPeers
 		}
 

@@ -11,6 +11,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/cenkalti/backoff/v4"
 )
 
 type Client struct {
@@ -27,14 +29,10 @@ func NewClient(p *Peers, b *coin.Blockchain, t string) *Client {
 	}
 }
 
-func (c *Client) BroadcastBlock(block coin.Block) coin.Block {
-	j, err := json.Marshal(block)
-	utils.PanicError(err)
-
+func (c *Client) BroadcastBlock(block coin.Block) (coin.Block, error) {
 	for _, peer := range c.Peers.Hostnames {
 		if peer != c.ThisPeer {
-			body := bytes.NewReader(j)
-			resp, err := http.Post(fmt.Sprintf("http://%s/block", peer), "application/json", body)
+			resp, err := httpPostWithBackoff(fmt.Sprintf("http://%s/block", peer), block)
 			if err != nil {
 				utils.ErrorLogger.Println(fmt.Sprintf("error when posting block %s", err))
 
@@ -49,11 +47,11 @@ func (c *Client) BroadcastBlock(block coin.Block) coin.Block {
 		}
 	}
 
-	return block
+	return block, nil
 }
 
 func (c *Client) getBlockchain(address string) (*coin.Blockchain, error) {
-	resp, err := http.Get(fmt.Sprintf("http://%s/block-chain", address))
+	resp, err := httpGetWithBackoff(fmt.Sprintf("http://%s/block-chain", address))
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +73,7 @@ func (c *Client) getBlockchain(address string) (*coin.Blockchain, error) {
 }
 
 func (c *Client) GetLatestBlockFromPeer(peer string) (*coin.Block, error) {
-	resp, err := http.Get(fmt.Sprintf("http://%s/latest-block", peer))
+	resp, err := httpGetWithBackoff(fmt.Sprintf("http://%s/latest-block", peer))
 	if err != nil {
 		return nil, err
 	}
@@ -97,15 +95,7 @@ func (c *Client) SpendCoin(spendCoinRelay SpendCoinRelay) error {
 		Amount:  spendCoinRelay.Amount,
 	}
 
-	j, err := json.Marshal(ct)
-	if err != nil {
-		return err
-	}
-
-	body := bytes.NewReader(j)
-
-	_, err = http.Post(fmt.Sprintf("http://%s/spend-coin", spendCoinRelay.Host), "application/json", body)
-
+	_, err := httpPostWithBackoff(fmt.Sprintf("http://%s/spend-coin", spendCoinRelay.Host), ct)
 	if err != nil {
 		return err
 	}
@@ -114,7 +104,7 @@ func (c *Client) SpendCoin(spendCoinRelay SpendCoinRelay) error {
 }
 
 func (c *Client) GetTxPoolFromPeer(peer string) (map[repository.TxIDType]repository.Transaction, error) {
-	resp, err := http.Get(fmt.Sprintf("http://%s/txpool", peer))
+	resp, err := httpGetWithBackoff(fmt.Sprintf("http://%s/txpool", peer))
 	if err != nil {
 		return nil, err
 	}
@@ -130,34 +120,30 @@ func (c *Client) GetTxPoolFromPeer(peer string) (map[repository.TxIDType]reposit
 	return txPool, nil
 }
 
-func (c *Client) GetPeers(hostName string) map[string]string {
-	resp, err := http.Get(fmt.Sprintf("http://%s/peers", hostName))
-	utils.PanicError(err)
-
+func (c *Client) GetPeers(hostName string) (map[string]string, error) {
+	resp, err := httpGetWithBackoff(fmt.Sprintf("http://%s/peers", hostName))
 	respBody, err := ioutil.ReadAll(resp.Body)
 	var peers map[string]string
 
 	err = json.Unmarshal(respBody, &peers)
-	utils.PanicError(err)
+	if err != nil {
+		return nil, err
+	}
 
-	return peers
+	return peers, nil
 }
 
-func (c *Client) GetHosts(hostName string, excludedHosts map[string]Details) []Details {
-	j, err := json.Marshal(excludedHosts)
-	utils.PanicError(err)
-	body := bytes.NewReader(j)
-
-	resp, err := http.Post(fmt.Sprintf("http://%s/hosts", hostName), "application/json", body)
-	utils.PanicError(err)
-
+func (c *Client) GetHosts(hostName string, excludedHosts map[string]Details) ([]Details, error) {
+	resp, err := httpPostWithBackoff(fmt.Sprintf("http://%s/hosts", hostName), excludedHosts)
 	respBody, err := ioutil.ReadAll(resp.Body)
 	var peers []Details
 
 	err = json.Unmarshal(respBody, &peers)
-	utils.PanicError(err)
+	if err != nil {
+		return nil, err
+	}
 
-	return peers
+	return peers, nil
 }
 
 // TODO: This will not work - cant simply take the longest chain - malice could have one block longer - should take the one that is 2 or 3 blocks longer
@@ -229,30 +215,20 @@ func (c *Client) QueryNetworkForUnconfirmedTxPool(peers map[string]string) error
 func (c *Client) BroadcastOnline(thisHostname string) {
 	h := HostName{Hostname: thisHostname}
 
-	j, err := json.Marshal(h)
-	utils.PanicError(err)
-
-	fmt.Println("Notifying these hosts: ", string(j))
+	fmt.Println("Notifying these hosts: ", h)
 
 	for _, hostname := range c.Peers.Hostnames {
-		body := bytes.NewReader(j)
-		_, err := http.Post(fmt.Sprintf("http://%s/notify", hostname), "application/json", body)
+		_, err := httpPostWithBackoff(fmt.Sprintf("http://%s/notify", hostname), h)
 		if err != nil {
-			fmt.Println(err)
+			utils.ErrorLogger.Println(err)
 		}
 	}
 }
 
 func (c *Client) BroadcastTransaction(tx repository.Transaction) error {
-	transaction, err := json.Marshal(tx)
-	if err != nil {
-		return err
-	}
-
 	for _, peer := range c.Peers.Hostnames {
 		if peer != c.ThisPeer {
-			body := bytes.NewReader(transaction)
-			resp, err := http.Post(fmt.Sprintf("http://%s/transaction", peer), "application/json", body)
+			resp, err := httpPostWithBackoff(fmt.Sprintf("http://%s/transaction", peer), tx)
 			if err != nil {
 				utils.ErrorLogger.Println(fmt.Sprintf("peer %s rejected transaction. error: %s", peer, err))
 				continue
@@ -293,4 +269,55 @@ func replayBlockChainTransactions(bc coin.Blockchain) error {
 	}
 
 	return nil
+}
+
+func httpPostWithBackoff(url string, body interface{}) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+
+	j, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+
+	b := bytes.NewReader(j)
+
+	op := func() error {
+		resp, err = http.Post(url, "application/json", b)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	err = backoff.Retry(op, backoff.NewExponentialBackOff())
+	if err != nil {
+		utils.ErrorLogger.Printf("Could not get peers: %s", err)
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func httpGetWithBackoff(url string) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+
+	op := func() error {
+		resp, err = http.Get(url)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	err = backoff.Retry(op, backoff.NewExponentialBackOff())
+	if err != nil {
+		utils.ErrorLogger.Printf("Could not get peers: %s", err)
+		return nil, err
+	}
+
+	return resp, nil
 }

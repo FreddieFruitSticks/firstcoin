@@ -23,9 +23,9 @@ services:
             firstcoinnetwork: 
         environment:
             - HOST_NAME=firstcoin-node2
-        depends_on: 
+        depends_on:
             - node1
-        command: ["sh", "-c", "./wait-for firstcoin-node1:8080 -- firstcoin 8081 firstcoin-node1:8080"]
+        command: ["sh", "-c", "./wait-for firstcoin-node1:8080 --timeout=30 -- firstcoin 8081 firstcoin-node1:8080"]
 
     node3:
         container_name: firstcoin-node3
@@ -36,4 +36,4 @@ services:
             - node2
         networks: 
             firstcoinnetwork: 
-        command: ["sh", "-c", "./wait-for firstcoin-node2:8081 -- firstcoin 8082 firstcoin-node2:8081"]
+        command: ["sh", "-c", "./wait-for firstcoin-node2:8081 --timeout=30 -- firstcoin 8082 firstcoin-node2:8081"]

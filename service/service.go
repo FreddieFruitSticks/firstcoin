@@ -34,9 +34,13 @@ func (s *BlockchainService) CreateNextBlock() (*coin.Block, *coin.Blockchain, er
 	coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(s.Wallet.Crypt, totalFees)
 	transactionPool = append(transactionPool, coinbaseTransaction)
 	transactionPool = append(transactionPool, txsToInclude...)
-	block := s.Blockchain.GenerateNextBlock(&transactionPool)
+	block, err := s.Blockchain.GenerateNextBlock(&transactionPool)
+	if err != nil {
+		utils.ErrorLogger.Println(fmt.Sprintf("Error in generating next block. err: %s", err))
+		return nil, nil, err
+	}
 
-	err := block.IsValidBlock(s.Blockchain.GetLastBlock())
+	err = block.IsValidBlock(s.Blockchain.GetLastBlock())
 	if err != nil {
 		utils.ErrorLogger.Println(fmt.Sprintf("Error in createNextBlock. err: %s", err))
 		return nil, nil, err
@@ -119,7 +123,7 @@ func CommitBlockTransactions(block coin.Block) error {
 	return nil
 }
 
-func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockchain) (coin.Blockchain, repository.Transaction) {
+func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockchain) (coin.Blockchain, repository.Transaction, error) {
 	genesisTransactionPool := make([]repository.Transaction, 0)
 
 	// coinbase transaction is the first transaction included by the miner
@@ -127,10 +131,13 @@ func CreateGenesisBlockchain(crypt wallet.Cryptographic, blockchain coin.Blockch
 	genesisTransactionPool = append(genesisTransactionPool, coinbaseTransaction)
 
 	repository.AddTxToUTxOSet(coinbaseTransaction)
+	genesisBlock, err := coin.GenesisBlock(SeedDifficultyLevel, genesisTransactionPool)
+	if err != nil {
+		return coin.Blockchain{}, repository.Transaction{}, err
+	}
+	blockchain.AddBlock(genesisBlock)
 
-	blockchain.AddBlock(coin.GenesisBlock(SeedDifficultyLevel, genesisTransactionPool))
-
-	return blockchain, coinbaseTransaction
+	return blockchain, coinbaseTransaction, nil
 }
 
 func (s *BlockchainService) AddTxToTxPool(tx repository.Transaction) bool {

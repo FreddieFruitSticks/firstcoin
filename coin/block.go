@@ -22,21 +22,26 @@ type Block struct {
 	Hash            []byte                   `json:"hash"`
 }
 
-func calculateBlockHash(index int, previousHash []byte, timestamp int, transactions []repository.Transaction, difficultyLevel int) []byte {
+func calculateBlockHash(index int, previousHash []byte, timestamp int, transactions []repository.Transaction, difficultyLevel int) ([]byte, error) {
 	msgHash := sha256.New()
 
 	// TODO: Does POW hash calculation contain transactions??
 	concatenatedTransactionIDs := concatTransactionIDs(transactions)
 	_, err := msgHash.Write([]byte(fmt.Sprintf("%d%s%d%s%d", index, string(previousHash), timestamp, concatenatedTransactionIDs, difficultyLevel)))
-	utils.PanicError(err)
+	if err != nil {
+		return nil, err
+	}
 
-	return msgHash.Sum(nil)
+	return msgHash.Sum(nil), nil
 }
 
-func GenesisBlock(seedDifficultyLevel int, transactionPool []repository.Transaction) Block {
+func GenesisBlock(seedDifficultyLevel int, transactionPool []repository.Transaction) (Block, error) {
 	var prevHash []byte
 	beginning := int(time.Date(2021, time.August, 13, 0, 0, 0, 0, time.UTC).UnixNano())
-	blockHash := calculateBlockHash(0, prevHash, beginning, transactionPool, seedDifficultyLevel)
+	blockHash, err := calculateBlockHash(0, prevHash, beginning, transactionPool, seedDifficultyLevel)
+	if err != nil {
+		return Block{}, err
+	}
 
 	return Block{
 		Index:           0,
@@ -46,7 +51,7 @@ func GenesisBlock(seedDifficultyLevel int, transactionPool []repository.Transact
 		Hash:            blockHash,
 		DifficultyLevel: seedDifficultyLevel,
 		Nonce:           ProofOfWork(blockHash, seedDifficultyLevel),
-	}
+	}, nil
 }
 
 func (b *Block) IsGenesisBlock() error {
@@ -74,8 +79,12 @@ func (b *Block) IsValidBlock(previousBlock Block) error {
 	if !reflect.DeepEqual(b.PreviousHash, previousBlock.Hash) {
 		return fmt.Errorf("Invalid block: %s", "invalid previous block hash")
 	}
+	hash, err := calculateBlockHash(b.Index, b.PreviousHash, b.Timestamp, b.Transactions, b.DifficultyLevel)
+	if err != nil {
+		return err
+	}
 
-	if !reflect.DeepEqual(calculateBlockHash(b.Index, b.PreviousHash, b.Timestamp, b.Transactions, b.DifficultyLevel), b.Hash) {
+	if !reflect.DeepEqual(hash, b.Hash) {
 		return fmt.Errorf("Invalid block: %s", "invalid block hash")
 	}
 

@@ -280,7 +280,10 @@ func (c *CoinServerHandler) getHostsRecursive(r *http.Request) (*HTTPResponse, *
 				continue
 			}
 
-			peersHostNames := c.Client.GetHosts(hostname, excludedHosts)
+			peersHostNames, err := c.Client.GetHosts(hostname, excludedHosts)
+			if err != nil {
+				utils.ErrorLogger.Println(err)
+			}
 
 			for _, hostDetails := range peersHostNames {
 				excludedHosts[hostDetails.HostName] = hostDetails

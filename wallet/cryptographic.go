@@ -38,7 +38,7 @@ func NewCryptographic() *Cryptographic {
 	return &Cryptographic{}
 }
 
-func (c *Cryptographic) GenerateKeyPair() {
+func (c *Cryptographic) GenerateKeyPair() error {
 	curve := elliptic.P256()
 	// generate key
 	privatekey, err := ecdsa.GenerateKey(curve, rand.Reader)
@@ -55,7 +55,7 @@ func (c *Cryptographic) GenerateKeyPair() {
 	// private key
 	privateKeyBytes, err := x509.MarshalECPrivateKey(privatekey)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	privateKeyBlock := &pem.Block{
@@ -69,7 +69,7 @@ func (c *Cryptographic) GenerateKeyPair() {
 	// public key
 	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publickey)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	publicKeyBlock := &pem.Block{
@@ -83,6 +83,8 @@ func (c *Cryptographic) GenerateKeyPair() {
 	hash160 := ConvertPublicKeyToHash160(pemEncodedPubKey)
 
 	c.FirstcoinAddress = []byte(base58.CheckEncode(hash160, 0))
+
+	return nil
 }
 
 func (c *Cryptographic) GenerateSignature(message []byte) []byte {

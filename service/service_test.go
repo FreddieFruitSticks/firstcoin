@@ -11,7 +11,7 @@ import (
 func TestUpdateUTxOSet(t *testing.T) {
 	t.Run("update legitimate tx", func(t *testing.T) {
 		amount := 5
-
+		var err error
 		senderCrypt := wallet.NewCryptographic()
 		senderCrypt.GenerateKeyPair()
 
@@ -22,8 +22,10 @@ func TestUpdateUTxOSet(t *testing.T) {
 
 		blocks := make([]coin.Block, 0)
 		blockchain := coin.NewBlockchain(blocks)
-		*blockchain, _ = service.CreateGenesisBlockchain(*senderCrypt, *blockchain)
-
+		*blockchain, _, err = service.CreateGenesisBlockchain(*senderCrypt, *blockchain)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
 		coinbaseTransaction, _ := wallet.CreateCoinbaseTransaction(*senderCrypt, 1)
 
 		tx, _, err := senderWallet.CreateTransaction(receiverCrypt.PublicKey, amount)
@@ -35,7 +37,11 @@ func TestUpdateUTxOSet(t *testing.T) {
 		transactionPool = append(transactionPool, coinbaseTransaction)
 		transactionPool = append(transactionPool, *tx)
 
-		block := blockchain.GenerateNextBlock(&transactionPool)
+		block, err := blockchain.GenerateNextBlock(&transactionPool)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+
 		err = service.CommitBlockTransactions(block)
 		if err != nil {
 			t.Fatalf("unexpected error: %s", err)

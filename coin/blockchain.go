@@ -34,11 +34,14 @@ func (b *Blockchain) SetBlockchain(blocks []Block) {
 	b.Blocks = blocks
 }
 
-func (b *Blockchain) GenerateNextBlock(transactionPool *[]repository.Transaction) Block {
+func (b *Blockchain) GenerateNextBlock(transactionPool *[]repository.Transaction) (Block, error) {
 	previousBlock := b.GetLastBlock()
 	currentDifficultyLevel := b.getDifficultyLevel()
 	now := int(time.Now().UnixNano())
-	hash := calculateBlockHash(previousBlock.Index+1, previousBlock.Hash, now, *transactionPool, currentDifficultyLevel)
+	hash, err := calculateBlockHash(previousBlock.Index+1, previousBlock.Hash, now, *transactionPool, currentDifficultyLevel)
+	if err != nil {
+		return Block{}, err
+	}
 	nonce := ProofOfWork(hash, currentDifficultyLevel)
 
 	return Block{
@@ -49,7 +52,7 @@ func (b *Blockchain) GenerateNextBlock(transactionPool *[]repository.Transaction
 		Hash:            hash,
 		Nonce:           nonce,
 		DifficultyLevel: currentDifficultyLevel,
-	}
+	}, nil
 }
 
 // Always favour the chain with the most work - it is sufficient to check the DifficultyLevel attribute on the block because this is validated in the IsValidBlock method
