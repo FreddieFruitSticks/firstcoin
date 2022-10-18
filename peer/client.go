@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	"github.com/cenkalti/backoff/v4"
 )
@@ -89,18 +90,26 @@ func (c *Client) GetLatestBlockFromPeer(peer string) (*coin.Block, error) {
 	return &block, nil
 }
 
-func (c *Client) SpendCoin(spendCoinRelay SpendCoinRelay) error {
+func (c *Client) SpendCoin(spendCoinRelay SpendCoinRelay) (*http.Response, error) {
+
 	ct := CreateTransactionControl{
 		Address: spendCoinRelay.Address,
 		Amount:  spendCoinRelay.Amount,
 	}
 
-	_, err := httpPostWithBackoff(fmt.Sprintf("http://%s/spend-coin", spendCoinRelay.Host), ct)
+	j, err := json.Marshal(ct)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	b := bytes.NewReader(j)
+
+	resp, err := http.Post(fmt.Sprintf("http://%s/spend-coin", spendCoinRelay.Host), "application/json", b)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 func (c *Client) GetTxPoolFromPeer(peer string) (map[repository.TxIDType]repository.Transaction, error) {
@@ -245,6 +254,10 @@ func (c *Client) BroadcastTransaction(tx repository.Transaction) error {
 }
 
 func readResponseBody(body io.ReadCloser) string {
+	if body == nil {
+		return ""
+	}
+
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(body)
 
@@ -271,6 +284,28 @@ func replayBlockChainTransactions(bc coin.Blockchain) error {
 	return nil
 }
 
+var (
+	DefaultInitialInterval     = 500 * time.Millisecond
+	DefaultRandomizationFactor = 0.5
+	DefaultMultiplier          = 1.5
+	DefaultMaxInterval         = 5 * time.Second
+	DefaultMaxElapsedTime      = 30 * time.Second
+)
+
+func NewExponentialBackOff() *backoff.ExponentialBackOff {
+	b := &backoff.ExponentialBackOff{
+		InitialInterval:     DefaultInitialInterval,
+		RandomizationFactor: DefaultRandomizationFactor,
+		Multiplier:          DefaultMultiplier,
+		MaxInterval:         DefaultMaxInterval,
+		MaxElapsedTime:      DefaultMaxElapsedTime,
+		Stop:                backoff.Stop,
+		Clock:               backoff.SystemClock,
+	}
+	b.Reset()
+	return b
+}
+
 func httpPostWithBackoff(url string, body interface{}) (*http.Response, error) {
 	var resp *http.Response
 	var err error
@@ -285,7 +320,13 @@ func httpPostWithBackoff(url string, body interface{}) (*http.Response, error) {
 	op := func() error {
 		resp, err = http.Post(url, "application/json", b)
 		if err != nil {
+			utils.ErrorLogger.Printf("%s", err)
 			return err
+		}
+		if resp.StatusCode > 399 {
+			utils.ErrorLogger.Printf("received response code %d", resp.StatusCode)
+			// DefaultMaxElapsedTime = 0 * time.Second
+			return fmt.Errorf(readResponseBody(resp.Body))
 		}
 
 		return nil
@@ -293,7 +334,7 @@ func httpPostWithBackoff(url string, body interface{}) (*http.Response, error) {
 
 	err = backoff.Retry(op, backoff.NewExponentialBackOff())
 	if err != nil {
-		utils.ErrorLogger.Printf("Could not get peers: %s", err)
+		utils.ErrorLogger.Printf("%s", err)
 		return nil, err
 	}
 
@@ -307,7 +348,14 @@ func httpGetWithBackoff(url string) (*http.Response, error) {
 	op := func() error {
 		resp, err = http.Get(url)
 		if err != nil {
+			utils.ErrorLogger.Printf("%s", err)
+
 			return err
+		}
+
+		if resp.StatusCode > 399 {
+			utils.ErrorLogger.Printf("%s", err)
+			return fmt.Errorf(readResponseBody(resp.Body))
 		}
 
 		return nil
@@ -315,7 +363,7 @@ func httpGetWithBackoff(url string) (*http.Response, error) {
 
 	err = backoff.Retry(op, backoff.NewExponentialBackOff())
 	if err != nil {
-		utils.ErrorLogger.Printf("Could not get peers: %s", err)
+		utils.ErrorLogger.Printf("%s", err)
 		return nil, err
 	}
 

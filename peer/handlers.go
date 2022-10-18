@@ -111,11 +111,18 @@ func (c *CoinServerHandler) spendCoinRelay(r *http.Request) (*HTTPResponse, *HTT
 			}
 		}
 
-		err = c.Client.SpendCoin(scr)
+		resp, err := c.Client.SpendCoin(scr)
 		if err != nil {
 			return nil, &HTTPError{
 				Code:    http.StatusInternalServerError,
 				Message: err.Error(),
+			}
+		}
+
+		if resp.StatusCode > 399 {
+			return nil, &HTTPError{
+				Code:    resp.StatusCode,
+				Message: fmt.Errorf(readResponseBody(resp.Body)).Error(),
 			}
 		}
 
