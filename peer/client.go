@@ -289,7 +289,7 @@ var (
 	DefaultRandomizationFactor = 0.5
 	DefaultMultiplier          = 1.5
 	DefaultMaxInterval         = 5 * time.Second
-	DefaultMaxElapsedTime      = 30 * time.Second
+	DefaultMaxElapsedTime      = 2 * time.Minute
 )
 
 func NewExponentialBackOff() *backoff.ExponentialBackOff {
